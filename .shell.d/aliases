@@ -1,0 +1,24 @@
+# Shell-agnostic aliases. Sourced from ~/.bashrc (and any future ~/.zshrc).
+# Aliases expand at definition time, so absolute paths are pinned in here.
+
+# ── gemini-chat: ACP client + daemon (project: ~/Documents/gemini-acp)
+GEMINI_CHAT_BIN="$HOME/Documents/gemini-acp/target/release/gemini-chat"
+GEMINI_CHAT_LOG="/tmp/gemini-chat-daemon.log"
+
+# Direct (one-shot / repl)
+alias gc="$GEMINI_CHAT_BIN"
+alias gcj="$GEMINI_CHAT_BIN --json"
+alias gcr="$GEMINI_CHAT_BIN --repl"
+alias gcrq="$GEMINI_CHAT_BIN --quiet --repl"
+
+# Daemon helpers
+alias gcd="$GEMINI_CHAT_BIN --daemon 2>$GEMINI_CHAT_LOG &"
+alias gca="$GEMINI_CHAT_BIN --connect"
+alias gcaj="$GEMINI_CHAT_BIN --connect --json"
+alias gcs="$GEMINI_CHAT_BIN --connect --shutdown"
+alias gclog="tail -f $GEMINI_CHAT_LOG"
+
+# ── flameshot: launch GUI with the terminal as parent window so xdg-desktop-portal-gnome
+# accepts the capture request on Wayland. Keybinding-launched flameshot fails on GNOME
+# Wayland — see ~/setup-flameshot-shortcut.sh for the Print-key fallback.
+alias flameshot-gui='flameshot gui'

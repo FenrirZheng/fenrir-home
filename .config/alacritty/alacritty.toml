@@ -1,0 +1,84 @@
+[general]
+live_config_reload = true
+import = ["~/.config/alacritty/themes/tokyo-night.toml"]
+
+[env]
+TERM = "alacritty"
+
+[window]
+opacity = 0.95
+blur = true
+dynamic_padding = true
+decorations = "full"
+startup_mode = "Windowed"
+dynamic_title = true
+
+[window.padding]
+x = 8
+y = 8
+
+[window.dimensions]
+columns = 120
+lines = 32
+
+[scrolling]
+history = 10000
+multiplier = 3
+
+[font]
+size = 12.0
+
+[font.normal]
+family = "DejaVu Sans Mono"
+style = "Book"
+
+[font.bold]
+family = "DejaVu Sans Mono"
+style = "Bold"
+
+[font.italic]
+family = "DejaVu Sans Mono"
+style = "Oblique"
+
+[font.bold_italic]
+family = "DejaVu Sans Mono"
+style = "Bold Oblique"
+
+[font.offset]
+x = 0
+y = 1
+
+[font.glyph_offset]
+x = 0
+y = 0
+
+[cursor]
+style = { shape = "Block", blinking = "On" }
+blink_interval = 500
+unfocused_hollow = true
+thickness = 0.15
+
+[mouse]
+hide_when_typing = true
+
+[selection]
+save_to_clipboard = true
+semantic_escape_chars = ",│`|:\"' ()[]{}<>\t"
+
+[terminal]
+osc52 = "CopyPaste"
+
+[keyboard]
+bindings = [
+  { key = "V",       mods = "Control|Shift", action = "Paste" },
+  { key = "C",       mods = "Control|Shift", action = "Copy" },
+  { key = "N",       mods = "Control|Shift", action = "CreateNewWindow" },
+  { key = "F",       mods = "Control|Shift", action = "SearchForward" },
+  { key = "B",       mods = "Control|Shift", action = "SearchBackward" },
+  { key = "Plus",    mods = "Control",       action = "IncreaseFontSize" },
+  { key = "Equals",  mods = "Control",       action = "IncreaseFontSize" },
+  { key = "Minus",   mods = "Control",       action = "DecreaseFontSize" },
+  { key = "Key0",    mods = "Control",       action = "ResetFontSize" },
+  { key = "K",       mods = "Control|Shift", action = "ClearHistory" },
+  { key = "L",       mods = "Control",       chars = "\f" },
+]

@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# gsweep — delete local branches already merged into <target> (default: current).
+# Worktrees holding a merged branch are removed first.
+# Dry-run by default; pass -y/--yes to actually delete.
+#
+# Usage:
+#   gsweep                 # dry-run, target = current branch
+#   gsweep main            # dry-run, target = main
+#   gsweep -y              # delete, target = current branch
+#   gsweep -y main         # delete, target = main
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+gsweep — delete local branches merged into <target> (default: current).
+Usage: gsweep [-y|--yes] [-f|--force] [<target-branch>]
+  Without -y, runs in dry-run mode.
+  Worktrees holding merged branches are removed before the branch.
+  -f/--force passes --force to `git worktree remove`, allowing removal
+    even when the worktree has uncommitted modifications or untracked
+    files. THIS DISCARDS THOSE FILES — there is no reflog for them.
+  Protected: main, master, develop, and the target branch itself.
+EOF
+}
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "gsweep: not in a git repo" >&2
+  exit 1
+fi
+
+apply=0
+force=0
+target=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -y|--yes)   apply=1 ;;
+    -f|--force) force=1 ;;
+    -h|--help)  usage; exit 0 ;;
+    -*)         echo "gsweep: unknown flag $1" >&2; exit 2 ;;
+    *)          target="$1" ;;
+  esac
+  shift
+done
+
+current=$(git branch --show-current)
+target="${target:-$current}"
+if [[ -z "$target" ]]; then
+  echo "gsweep: detached HEAD and no target given" >&2
+  exit 1
+fi
+
+if ! git rev-parse --verify --quiet "refs/heads/$target" >/dev/null; then
+  echo "gsweep: target branch '$target' does not exist" >&2
+  exit 1
+fi
+
+protected_re='^(main|master|develop)$'
+
+# Strip the 2-char prefix (`  `, `* `, `+ `) `git branch` always prints.
+merged=$(git branch --merged "$target" \
+  | sed 's/^..//' \
+  | rg -v "$protected_re" \
+  | rg -v "^${target}\$" || true)
+
+if [[ -z "$merged" ]]; then
+  echo "gsweep: nothing to clean (target: $target)"
+  exit 0
+fi
+
+# branch<TAB>worktree-path
+wt_map=$(git worktree list --porcelain \
+  | awk '/^worktree / {p=$2} /^branch refs\/heads\// {sub("refs/heads/","",$2); print $2"\t"p}')
+
+lookup_wt() {
+  printf '%s\n' "$wt_map" | awk -F'\t' -v b="$1" '$1==b {print $2; exit}'
+}
+
+echo "gsweep: target = $target"
+echo "gsweep: candidates merged into $target:"
+while IFS= read -r b; do
+  [[ -z "$b" ]] && continue
+  wt=$(lookup_wt "$b")
+  if [[ -n "$wt" ]]; then
+    printf '  %s  (worktree: %s)\n' "$b" "$wt"
+  else
+    printf '  %s\n' "$b"
+  fi
+done <<< "$merged"
+
+if [[ "$apply" -eq 0 ]]; then
+  echo "gsweep: dry-run — pass -y to apply"
+  exit 0
+fi
+
+echo
+wt_remove_args=()
+[[ "$force" -eq 1 ]] && wt_remove_args+=(--force)
+
+while IFS= read -r b; do
+  [[ -z "$b" ]] && continue
+  wt=$(lookup_wt "$b")
+  if [[ -n "$wt" ]]; then
+    if [[ "$force" -eq 1 ]]; then
+      echo "→ removing worktree $wt (--force: discards uncommitted changes)"
+    else
+      echo "→ removing worktree $wt"
+    fi
+    if ! git worktree remove "${wt_remove_args[@]}" "$wt"; then
+      echo "gsweep: skip $b (worktree removal failed; pass -f to force)" >&2
+      continue
+    fi
+  fi
+  echo "→ deleting branch $b"
+  git branch -d "$b"
+done <<< "$merged"

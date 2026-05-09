@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+_oz_path_regex='[\w./-]+\.(?:java|kt|xml|yaml|yml|json|md|rs|py|ts|tsx|js|jsx|go|sh|proto|tf|toml|gradle)(?::\d+)?'
+
+tmux capture-pane -p -S -50 \
+  | grep -oP "$_oz_path_regex" \
+  | sort -u \
+  | fzf --height=40% --reverse --prompt="Zed 開啟 > " \
+  | xargs -r zed

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — guard the dotfiles repo against credential leaks.
+#
+# Activated by:  git config core.hooksPath .githooks
+# (Configured per-clone; new clones must re-run the command. See README.md.)
+#
+# One check, fatal:
+#   gitleaks git --staged — scan staged content for credential patterns
+#   (OAuth tokens, AWS keys, private keys, GitHub PATs, etc.). With the
+#   allow-by-default .gitignore strategy, gitleaks is the primary defense
+#   against accidentally committing a token pasted into a tracked config file.
+#
+# Note on coverage: gitleaks regex is tuned for high-confidence patterns
+# (e.g. `password: 6Qr...`). It does NOT catch free-form password comments
+# like `# pwd: foo` or `## user x/y`. Don't rely on gitleaks alone — keep
+# secrets out of tracked files. See dotfile-plan.md (Phase 2 lessons).
+#
+# Bypass: `git commit --no-verify`. Per global CLAUDE.md, do not reach for
+# --no-verify — fix the underlying issue.
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+gitleaks_bin="$repo_root/.local/bin/gitleaks"
+
+echo "pre-commit: gitleaks (scan staged) ..."
+if [[ ! -x "$gitleaks_bin" ]]; then
+  echo "  [FAIL] $gitleaks_bin not found or not executable" >&2
+  echo "  Install: download from https://github.com/gitleaks/gitleaks/releases" >&2
+  exit 1
+fi
+
+if "$gitleaks_bin" git --staged --redact --no-banner --exit-code 1 . ; then
+  echo "  ok"
+  exit 0
+fi
+
+echo "  [FAIL] gitleaks found credential patterns in staged content (above)." >&2
+echo "  False positive? Add 'gitleaks:allow' comment on the line, or update" >&2
+echo "  .gitleaksignore with the leak fingerprint. Otherwise:" >&2
+echo "    git restore --staged <file>   # then remove the secret and re-stage" >&2
+exit 1

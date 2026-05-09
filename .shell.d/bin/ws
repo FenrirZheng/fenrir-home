@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arg="${1:-}"
+if [[ "$arg" == *:* ]]; then
+  file="${arg%:*}"
+  line="${arg##*:}"
+  webstorm --line "$line" "$file"
+else
+  webstorm "$arg"
+fi

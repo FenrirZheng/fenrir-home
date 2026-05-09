@@ -1,0 +1,87 @@
+# dotfiles repo for $HOME — paired with `git config status.showUntrackedFiles no`.
+#
+# Strategy:
+#   - Untracked files at $HOME root (caches, creds, IDE state, language toolchains,
+#     nested project repos, app state) are hidden by the showUntrackedFiles=no
+#     config, NOT by ignore rules. Don't re-add a $HOME-root deny list here —
+#     the deny list was unmaintainable (every new app dropped a new untracked
+#     dir we had to chase).
+#   - This file's job is now narrower: keep `git add <dir>` safe for the
+#     deny-then-whitelist regions (.config/, .local/, .gemini/, .tmux/plugins/),
+#     and pattern-block build artefacts inside tracked subtrees.
+#   - To inspect what's untracked at $HOME: `git status -uall` (one-shot opt-in).
+#   - .ssh/ and other cred dirs are not in this file. They stay untracked because
+#     showUntrackedFiles=no hides them; if you ever `git add` one explicitly,
+#     that's a deliberate decision and you should split secrets out first
+#     (see CLAUDE.md → Phase 1 ssh Include directive plan).
+#
+# When adding a new tracked file:
+#   - At $HOME root: just `git add <path>`. Won't show in `git status` until added.
+#   - Under .config/, .local/, .gemini/: add a `!`-rule per level, same pattern
+#     as before (`!/.config/foo/`, `!/.config/foo/**`). Open every directory level.
+
+# editor / shell backups (apply repo-wide so they don't sneak into tracked subtrees)
+*~
+*.swp
+*.swo
+\#*\#
+.\#*
+
+# build artefacts inside any tracked subtree
+**/target/
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+**/Thumbs.db
+
+# ============================================================
+# .config/: app-state-heavy, deny-then-whitelist for `git add` safety
+# ============================================================
+/.config/*
+!/.config/alacritty/
+!/.config/alacritty/**
+!/.config/autostart/
+# autostart: third-party apps drop their own .desktop files + mimeinfo.cache.
+# Re-deny dir contents + whitelist ours.
+/.config/autostart/*
+!/.config/autostart/org.fcitx.Fcitx5.desktop
+!/.config/environment.d/
+!/.config/environment.d/im-fcitx5.conf
+!/.config/fcitx5/
+!/.config/fcitx5/**
+# fcitx5 rewrites cached_layouts on every run; never re-add it.
+/.config/fcitx5/conf/cached_layouts
+!/.config/systemd/
+!/.config/systemd/**
+
+# ============================================================
+# .local/: deny-then-whitelist
+# ============================================================
+/.local/*
+!/.local/bin/
+/.local/bin/*
+!/.local/bin/mqpub
+!/.local/bin/mqsend
+!/.local/bin/mqstop
+!/.local/bin/zoxide-seed.sh
+
+# ============================================================
+# .gemini/: cred-bearing app dir — strict whitelist, NEVER use **
+# ============================================================
+# Contains oauth_creds.json, google_accounts.json, installation_id, history/,
+# mailbox/. Whitelist files one by one.
+/.gemini/*
+!/.gemini/settings.json
+!/.gemini/bin/
+/.gemini/bin/*
+!/.gemini/bin/talk_claude.sh
+!/.gemini/skills/
+!/.gemini/skills/**
+
+# ============================================================
+# .tmux/plugins/: TPM owns most plugins; we track tmux-jump-rust submodule + INDEX
+# ============================================================
+/.tmux/plugins/*
+!/.tmux/plugins/tmux-jump-rust
+!/.tmux/plugins/INDEX.md
