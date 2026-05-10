@@ -22,3 +22,10 @@ alias gclog="tail -f $GEMINI_CHAT_LOG"
 # accepts the capture request on Wayland. Keybinding-launched flameshot fails on GNOME
 # Wayland — see ~/setup-flameshot-shortcut.sh for the Print-key fallback.
 alias flameshot-gui='flameshot gui'
+
+# ── fcitx5: restart the daemon in place. First aid for "輸入法突然怪怪的" — candidate
+# window not popping up, preedit stuck, can't toggle IME. On Wayland the candidate popup
+# is a layer-shell surface whose connection can go zombie after suspend / display hotplug
+# while the addon still reports "loaded", so a daemon restart is the fix. Touches no config
+# files; ~1s input blip. (Diagnosed 2026-05-10 — chewing candidate ↓ stopped working.)
+alias im-restart='fcitx5 --replace -d'
