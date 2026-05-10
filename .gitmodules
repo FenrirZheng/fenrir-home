@@ -1,3 +1,12 @@
 [submodule ".tmux/plugins/tmux-jump-rust"]
 	path = .tmux/plugins/tmux-jump-rust
 	url = git@github.com:FenrirZheng/tmux-ace-jump.git
+[submodule "fenrir-tools/claud-chat-acp"]
+	path = fenrir-tools/claud-chat-acp
+	url = git@github.com:FenrirZheng/claud-chat-acp.git
+[submodule "fenrir-tools/claude-agentic-chat"]
+	path = fenrir-tools/claude-agentic-chat
+	url = git@github.com:FenrirZheng/claude-agentic-chat.git
+[submodule "fenrir-tools/gemini-acp"]
+	path = fenrir-tools/gemini-acp
+	url = git@github.com:FenrirZheng/gemini-chat.git
