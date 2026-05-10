@@ -4,7 +4,7 @@ Project-level guidance for `/home/fenrir`, a single-machine **home-directory dot
 
 ## Repo shape
 
-- Working tree is the entire home directory. ~20 nested independent git repos live under `code/`, `WebstormProjects/`, `Documents/` — they are not submodules, just unrelated clones the parent repo deliberately ignores.
+- Working tree is the entire home directory. ~20 nested independent git repos live under `code/`, `WebstormProjects/`, `Documents/` — they are not submodules, just unrelated clones the parent repo deliberately ignores. The one exception is `fenrir-tools/` (locally-developed CLI tools registered as real submodules — see the [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools-as-submodules) below).
 - **Strategy: `status.showUntrackedFiles=no` + slim deny-then-whitelist `.gitignore`** (rebuilt 2026-05-09, root commit `e5d70b7`). The repo's history before that commit was discarded — only one user, no collaborators, so the rebuild was free.
   - **`$HOME` root noise** (caches, creds, IDE state, language toolchains, nested project repos, app state) is hidden by `git config status.showUntrackedFiles no`, NOT by `.gitignore` rules. The previous `$HOME`-root deny list was unmaintainable: `git status -uall` shows ~1M untracked items, every new app drops a new dir to chase. The config-based hide makes that whole problem disappear.
   - **`.config/`, `.local/`, `.gemini/`**: deny-then-whitelist. Even with untracked-hidden, these dirs need positive containment so `git add <dir>` doesn't sweep in `oauth_creds.json`-style siblings. Explicit `!`-rule per file/subdir we want.
@@ -31,6 +31,32 @@ Operational consequences:
 - Each plugin's own `.gitignore` (e.g. `/target` for the Rust port) still applies — `target/` build artifacts are excluded automatically. Don't add a duplicate rule in the root `.gitignore`.
 - `tmux-jump-rust` requires `cargo build --release` after the first clone; the wrapper `tmux-jump.tmux` auto-discovers the binary.
 - Plugin-specific notes live in [`.tmux/CLAUDE.md`](.tmux/CLAUDE.md).
+
+## fenrir-tools/: locally-developed CLI tools as submodules
+
+`fenrir-tools/` at the repo root holds the user's own Agent-Client-Protocol (ACP) helper CLIs, each a separate GitHub repo registered as a submodule in [`.gitmodules`](.gitmodules). All three use the **absorbed git-dir layout** (same as `tmux-jump-rust`): the inner `.git` is a `gitdir:` pointer into `.git/modules/fenrir-tools/<name>/`, so `rm -rf` on a checkout doesn't destroy its history.
+
+| path | upstream remote | what it is | build |
+|---|---|---|---|
+| `fenrir-tools/claud-chat-acp` | `FenrirZheng/claud-chat-acp` | Rust ACP client (`claud-chat` binary) | `cargo build --release` |
+| `fenrir-tools/claude-agentic-chat` | `FenrirZheng/claude-agentic-chat` | Node Claude Agent SDK chat (`dist/index.js`) | `npm install && npm run build` |
+| `fenrir-tools/gemini-acp` | `FenrirZheng/gemini-chat` | Rust Gemini ACP client (`gemini-chat` binary) — **path ≠ repo name** | `cargo build --release` |
+
+Why these are submodules and the `code/` / `Documents/` clones are not: these are actively developed locally and the parent repo pins a blessed SHA for each — identical rationale to the `tmux-jump-rust` exception. Plain unrelated clones get no value from a parent-tracked SHA, so they stay untracked noise.
+
+`~/.local/bin/{claud-chat,claude-chat,gemini-chat}` are symlinks into these checkouts' build outputs. The symlinks are **not tracked** (`.local/bin/` is deny-then-whitelist and they aren't whitelisted) — recreate them after a fresh clone + build:
+
+```bash
+ln -sfn ~/fenrir-tools/claud-chat-acp/target/release/claud-chat  ~/.local/bin/claud-chat
+ln -sfn ~/fenrir-tools/claude-agentic-chat/dist/index.js         ~/.local/bin/claude-chat
+ln -sfn ~/fenrir-tools/gemini-acp/target/release/gemini-chat     ~/.local/bin/gemini-chat
+```
+
+Operational consequences:
+- **Fresh parent clone**: `git -C ~ submodule update --init` populates all submodules (these three + `tmux-jump-rust`); then run each repo's build (table above) and recreate the symlinks.
+- **Editing inside one**: commit in the inner repo first, then the parent shows `modified: fenrir-tools/<name>` (gitlink SHA changed). To bless the new SHA: `git -C ~ add fenrir-tools/<name> && git -C ~ commit`. To revert to the pinned SHA: `git -C ~ submodule update fenrir-tools/<name>`.
+- Each inner repo's own `.gitignore` handles its build artefacts (`/target`, `/dist`, `node_modules/`) — don't duplicate those in the root [`.gitignore`](.gitignore).
+- Some of these carry their own `CLAUDE.md` (e.g. `fenrir-tools/claude-agentic-chat/CLAUDE.md`) — that's the place for tool-internal guidance, not this file.
 
 ## Commit conventions
 
@@ -63,18 +89,19 @@ After cloning into `$HOME` on a new machine:
 
 1. `git -C ~ config status.showUntrackedFiles no` — hide the ~1M `$HOME` items the repo doesn't track. Without this, `git status` is unusable.
 2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked).
-3. `git -C ~ submodule update --init .tmux/plugins/tmux-jump-rust` — populate the one tracked plugin.
+3. `git -C ~ submodule update --init` — populate all submodules: `.tmux/plugins/tmux-jump-rust` plus the three under `fenrir-tools/` (see the [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools-as-submodules)).
 4. Inside tmux: `prefix + I` — let TPM clone the rest of `.tmux/plugins/`.
 5. `cd ~/.tmux/plugins/tmux-jump-rust && cargo build --release` — build the jump binary.
-6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required by the pre-commit hook.
+6. Build the `fenrir-tools/` CLIs (`cargo build --release` in the two Rust repos, `npm install && npm run build` in `claude-agentic-chat`) and recreate the `~/.local/bin/{claud-chat,claude-chat,gemini-chat}` symlinks — see the [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools-as-submodules) for the exact `ln` commands.
+7. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required by the pre-commit hook.
 
 Verify with `git -C ~ status` (should be clean, with the `(use -u to show untracked files)` hint) and an empty commit through the hook (`git -C ~ commit --allow-empty -m test && git -C ~ reset --soft HEAD~1`).
 
 ## Don't
 
 - Don't `git push` or open PRs (per global rule).
-- Don't `git submodule add` for TPM-managed plugins (everything except `tmux-jump-rust`) — they're intentionally untracked so TPM owns them end-to-end. The `tmux-jump-rust` submodule is the deliberate exception; see "tmux plugins" section above.
-- Don't run `git submodule add` from inside an existing inner repo's working tree. The Bash tool's CWD persists across calls, so use `git -C /home/fenrir submodule add ...` to lock the parent repo as cwd. Otherwise the submodule registration lands in the wrong repo and clones a nested copy at `<inner>/.tmux/plugins/<name>/`.
+- Don't `git submodule add` for TPM-managed plugins (everything under `.tmux/plugins/` except `tmux-jump-rust`) — they're intentionally untracked so TPM owns them end-to-end. The tracked submodules are exactly `tmux-jump-rust` and the three under `fenrir-tools/`; see the "tmux plugins" and "fenrir-tools" sections above.
+- Don't run `git submodule add` from inside an existing inner repo's working tree. The Bash tool's CWD persists across calls, so use `git -C /home/fenrir submodule add ...` to lock the parent repo as cwd. Otherwise the submodule registration lands in the wrong repo and clones a nested copy under that inner repo (e.g. `<inner>/fenrir-tools/<name>/`).
 - Don't add a fallback `.tmux/plugins/*/target/` exclude to root `.gitignore` — sub-gitignores already handle it.
 - **Never `git add .` or `git add -A` at `$HOME`.** Under `showUntrackedFiles=no` it's tempting because `git status` looks clean, but `add .` ignores that config — it walks the actual filesystem and would try to stage everything not gitignored. The slim `.gitignore` only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list — they were untracked-by-config, not untracked-by-rule. `git add <specific-path>` always; never the cwd shortcut.
 - Don't repopulate the old `$HOME`-root deny list in `.gitignore`. It was deliberately deleted in the `e5d70b7` rebuild — the config-based hide replaces it. If you find yourself wanting to add `/.someapp/` to ignore-noise, the answer is "it's already hidden, you're looking at `git status -uall` output".
