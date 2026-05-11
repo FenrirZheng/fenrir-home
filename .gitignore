@@ -51,6 +51,7 @@
 !/.config/fcitx5/
 !/.config/fcitx5/**
 # fcitx5 rewrites cached_layouts on every run; never re-add it.
+!/.config/fcitx5/conf/**
 /.config/fcitx5/conf/cached_layouts
 !/.config/systemd/
 !/.config/systemd/**
