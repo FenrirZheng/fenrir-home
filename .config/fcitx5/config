@@ -1,5 +1,7 @@
 [Hotkey]
-# Trigger key: F13 emitted by keyd from CapsLock tap (Mac-feel toggle).
+# IME toggle is driven externally by keyd: physical RightAlt -> command(/usr/local/bin/fcitx5-toggle)
+# -> fcitx5-remote -t over DBus. See /etc/keyd/default.conf. The TriggerKeys=F13 below is a
+# vestigial no-op fallback (nothing on this machine ever emits F13) — left in place, harmless.
 TriggerKeys=F13
 EnumerateWithTriggerKeys=True
 EnumerateForwardKeys=
