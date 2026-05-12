@@ -10,3 +10,6 @@
 [submodule "fenrir-tools/gemini-acp"]
 	path = fenrir-tools/gemini-acp
 	url = git@github.com:FenrirZheng/gemini-chat.git
+[submodule ".claude"]
+	path = .claude
+	url = git@github.com:FenrirZheng/claude-for-fenrir.git
