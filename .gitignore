@@ -53,6 +53,9 @@
 # fcitx5 rewrites cached_layouts on every run; never re-add it.
 !/.config/fcitx5/conf/**
 /.config/fcitx5/conf/cached_layouts
+# keyd: source-of-truth copy of /etc/keyd/default.conf (keyd itself reads /etc/, not here).
+!/.config/keyd/
+!/.config/keyd/**
 !/.config/systemd/
 !/.config/systemd/**
 

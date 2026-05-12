@@ -58,6 +58,44 @@ Operational consequences:
 - Each inner repo's own `.gitignore` handles its build artefacts (`/target`, `/dist`, `node_modules/`) — don't duplicate those in the root [`.gitignore`](.gitignore).
 - Some of these carry their own `CLAUDE.md` (e.g. `fenrir-tools/claude-agentic-chat/CLAUDE.md`) — that's the place for tool-internal guidance, not this file.
 
+## Keyboard remapping (keyd)
+
+Physical-key remapping is done by [`keyd`](https://github.com/rvaiya/keyd) (system service, runs as root). keyd 2.5+ reads **only `/etc/keyd/*.conf`** — it does not look at `~/.config/keyd/`. So the repo carries [`/.config/keyd/default.conf`](.config/keyd/default.conf) as the **source of truth**; `/etc/keyd/default.conf` is a deployed copy. Deploy / re-deploy:
+
+```bash
+sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl restart keyd
+```
+
+If you ever edit `/etc/keyd/default.conf` in place (e.g. quick experiment), **copy it back** to `~/.config/keyd/default.conf` and commit, or the two drift. Rollback: `sudo systemctl stop keyd` (keyboard returns to stock behaviour), or restore one of the `default.conf.bak.*` siblings that live next to the deployed file in `/etc/keyd/`.
+
+Current physical → logical map (laptop AT keyboard + 2 Logitech wireless; `[ids] *` covers all):
+
+| physical key | behaviour | why |
+|---|---|---|
+| CapsLock | plain LeftCtrl | was `overload(ctrl_layer, command(fcitx5-toggle))` — the tap/hold dual role mis-fired into IME toggles while typing fast; now single-function |
+| Right Alt | IME toggle (`command(/usr/local/bin/fcitx5-toggle)`) | dedicated single-function key, fires on key-down — nothing to misjudge; `us` layout doesn't use AltGr anyway. Mirrors the JIS 変換/한영 position next to Space |
+| Left Ctrl (bottom-left) | Super (`layer(meta)`) | corner key = Windows/Super, like a Mac; `layer(meta)` not bare `leftmeta` so it works as a real modifier in chords (keyd warns against bare meta on RHS) |
+| Left Win | tap = Super (GNOME Activities), hold = `opt` layer (word-jump: `C-left/right/backspace`) | |
+| Right Ctrl, Left Alt | unchanged | |
+
+The IME toggle calls `/usr/local/bin/fcitx5-toggle` (root → drops to user `fenrir`'s session bus → `fcitx5-remote -t`). That script is **not tracked** (it's in `/usr/local/bin/`); recreate it on a fresh machine:
+
+```bash
+sudo tee /usr/local/bin/fcitx5-toggle >/dev/null <<'EOF'
+#!/bin/bash
+# Toggle fcitx5 IM state. Called by keyd (RightAlt) — keyd runs as root, so drop
+# to user fenrir's session bus to reach the fenrir-owned fcitx5 daemon.
+exec /usr/sbin/runuser -u fenrir -- env \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+  XDG_RUNTIME_DIR=/run/user/1000 \
+  DISPLAY=:0 \
+  /usr/bin/fcitx5-remote -t
+EOF
+sudo chmod +x /usr/local/bin/fcitx5-toggle
+```
+
+`fcitx5` itself: [`/.config/fcitx5/config`](.config/fcitx5/config) keeps `TriggerKeys=F13` as a vestigial no-op (nothing emits F13 here) — the real toggle is the keyd→RightAlt→DBus path above; the `[Hotkey]` comment in that file says so.
+
 ## Commit conventions
 
 `git log --oneline` shows a preference for **small, system-scoped commits that bundle config + service** together (e.g. `ab99e2b` adds zoxide-seed shell config and the emacs daemon systemd unit in one commit). Don't split a feature's client and service halves into separate commits unless they truly are independent.
@@ -94,6 +132,7 @@ After cloning into `$HOME` on a new machine:
 5. `cd ~/.tmux/plugins/tmux-jump-rust && cargo build --release` — build the jump binary.
 6. Build the `fenrir-tools/` CLIs (`cargo build --release` in the two Rust repos, `npm install && npm run build` in `claude-agentic-chat`) and recreate the `~/.local/bin/{claud-chat,claude-chat,gemini-chat}` symlinks — see the [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools-as-submodules) for the exact `ln` commands.
 7. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required by the pre-commit hook.
+8. Keyboard remap: install `keyd`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
 
 Verify with `git -C ~ status` (should be clean, with the `(use -u to show untracked files)` hint) and an empty commit through the hook (`git -C ~ commit --allow-empty -m test && git -C ~ reset --soft HEAD~1`).
 
@@ -106,3 +145,4 @@ Verify with `git -C ~ status` (should be clean, with the `(use -u to show untrac
 - **Never `git add .` or `git add -A` at `$HOME`.** Under `showUntrackedFiles=no` it's tempting because `git status` looks clean, but `add .` ignores that config — it walks the actual filesystem and would try to stage everything not gitignored. The slim `.gitignore` only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list — they were untracked-by-config, not untracked-by-rule. `git add <specific-path>` always; never the cwd shortcut.
 - Don't repopulate the old `$HOME`-root deny list in `.gitignore`. It was deliberately deleted in the `e5d70b7` rebuild — the config-based hide replaces it. If you find yourself wanting to add `/.someapp/` to ignore-noise, the answer is "it's already hidden, you're looking at `git status -uall` output".
 - Don't restore `/.config/fcitx5/conf/cached_layouts` to tracked. fcitx5 rewrites it on every run; the rebuild intentionally dropped it. If `git status -uall` shows it as untracked, that's correct — let fcitx5 own it.
+- Don't edit `/etc/keyd/default.conf` and forget to mirror it back to [`.config/keyd/default.conf`](.config/keyd/default.conf) — the repo copy is the source of truth, the `/etc/` one is a deploy target. See the [Keyboard remapping section](#keyboard-remapping-keyd).
