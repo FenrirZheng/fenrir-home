@@ -53,9 +53,8 @@
 # fcitx5 rewrites cached_layouts on every run; never re-add it.
 !/.config/fcitx5/conf/**
 /.config/fcitx5/conf/cached_layouts
-# keyd: source-of-truth copy of /etc/keyd/default.conf (keyd itself reads /etc/, not here).
-!/.config/keyd/
-!/.config/keyd/**
+# keyd: tracked as submodule .config/keyd (FenrirZheng/fenrir-keyd). The gitlink
+# overrides the /.config/* deny rule above; no whitelist line needed here.
 !/.config/systemd/
 !/.config/systemd/**
 

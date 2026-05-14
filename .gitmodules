@@ -13,3 +13,6 @@
 [submodule ".claude"]
 	path = .claude
 	url = git@github.com:FenrirZheng/claude-for-fenrir.git
+[submodule ".config/keyd"]
+	path = .config/keyd
+	url = git@github.com:FenrirZheng/fenrir-keyd.git
