@@ -28,3 +28,6 @@
 [submodule ".config/autostart"]
 	path = .config/autostart
 	url = git@github.com:FenrirZheng/fenrir-autostart.git
+[submodule ".config/fcitx5"]
+	path = .config/fcitx5
+	url = git@github.com:FenrirZheng/fenrir-fcitx5.git

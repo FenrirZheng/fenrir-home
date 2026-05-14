@@ -36,16 +36,14 @@
 **/Thumbs.db
 
 # ============================================================
-# .config/: app-state-heavy, deny-then-whitelist for `git add` safety
+# .config/: every tracked subtree is a per-app submodule
+# (FenrirZheng/fenrir-{alacritty,autostart,environment-d,fcitx5,keyd,systemd}).
+# `/.config/*` denies the directory walk; submodule gitlinks override the deny
+# because they're tracked via the index, not by walking the working tree.
+# Runtime state (fcitx5 cached_layouts, third-party .desktop drops in autostart,
+# etc.) is handled by each submodule's own .gitignore — no whitelist here.
 # ============================================================
 /.config/*
-!/.config/fcitx5/
-!/.config/fcitx5/**
-# fcitx5 rewrites cached_layouts on every run; never re-add it.
-!/.config/fcitx5/conf/**
-/.config/fcitx5/conf/cached_layouts
-# keyd, alacritty, systemd: tracked as per-app submodules (FenrirZheng/fenrir-*).
-# Gitlinks override the /.config/* deny rule above; no whitelist needed.
 
 # ============================================================
 # .local/: deny-then-whitelist
