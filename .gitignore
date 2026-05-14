@@ -39,8 +39,6 @@
 # .config/: app-state-heavy, deny-then-whitelist for `git add` safety
 # ============================================================
 /.config/*
-!/.config/alacritty/
-!/.config/alacritty/**
 !/.config/autostart/
 # autostart: third-party apps drop their own .desktop files + mimeinfo.cache.
 # Re-deny dir contents + whitelist ours.

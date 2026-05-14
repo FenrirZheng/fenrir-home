@@ -16,3 +16,6 @@
 [submodule ".config/keyd"]
 	path = .config/keyd
 	url = git@github.com:FenrirZheng/fenrir-keyd.git
+[submodule ".config/alacritty"]
+	path = .config/alacritty
+	url = git@github.com:FenrirZheng/fenrir-alacritty.git
