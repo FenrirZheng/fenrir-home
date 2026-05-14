@@ -19,3 +19,6 @@
 [submodule ".config/alacritty"]
 	path = .config/alacritty
 	url = git@github.com:FenrirZheng/fenrir-alacritty.git
+[submodule ".config/systemd"]
+	path = .config/systemd
+	url = git@github.com:FenrirZheng/fenrir-systemd.git
