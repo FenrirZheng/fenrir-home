@@ -62,14 +62,13 @@ Operational consequences:
 
 `.claude/` (i.e. `~/.claude/`) is a submodule registered in [`.gitmodules`](.gitmodules) pointing at `git@github.com:FenrirZheng/claude-for-fenrir.git`. Same rationale as `tmux-jump-rust` / `fenrir-tools/`: it's actively edited locally (skills, hooks, agents, commands, output styles, `CLAUDE.md`, `settings.json`), benefits from its own history, and the parent repo pins a blessed SHA. Uses the **absorbed git-dir layout** — git data lives in `.git/modules/.claude/`, the inner `.claude/.git` is a `gitdir:` pointer.
 
-What the submodule tracks vs. ignores: the inner repo's own [`.gitignore`](.claude/.gitignore) keeps the curated config (`skills/`, `hooks/`, `agents/` minus generated ones, `commands/`, `mcp-servers/`, `CLAUDE.md`, `settings.json`) and excludes everything machine-local or sensitive — `.credentials.json`, `settings.local.json` (root-owned, per-machine), `history.jsonl`, `projects/`, `todos/`, `tasks/`, `sessions/`, `session-env/`, `shell-snapshots/`, `file-history/`, `paste-cache/`, `plans/`, `debug/`, `statsig/`, `telemetry/`, `usage-data/`, `plugins/`, `cache/`, `downloads/`. Don't duplicate any of those in the root [`.gitignore`](.gitignore), and don't add a `.claude` rule there at all — submodule gitlinks are tracked via the index regardless of gitignore.
+What the submodule tracks vs. ignores: the inner repo's own [`.gitignore`](.claude/.gitignore) keeps the curated config (`skills/`, `hooks/`, `agents/` except `web-research.md`, `commands/`, `mcp-servers/`, `CLAUDE.md`, `settings.json`) and excludes everything machine-local or sensitive — `.credentials.json`, `settings.local.json` (root-owned, per-machine), `history.jsonl`, `projects/`, `todos/`, `tasks/`, `sessions/`, `session-env/`, `shell-snapshots/`, `file-history/`, `paste-cache/`, `plans/`, `debug/`, `statsig/`, `telemetry/`, `usage-data/`, `plugins/`, `cache/`, `downloads/`. Don't duplicate any of those in the root [`.gitignore`](.gitignore), and don't add a `.claude` rule there at all — submodule gitlinks are tracked via the index regardless of gitignore.
 
 Secrets note: the parent's gitleaks pre-commit hook only scans files staged *in the parent* — for `.claude` that's just the gitlink SHA + `.gitmodules`, never the submodule's working tree. Secrets hygiene therefore lives in the submodule's `.gitignore` (above) and, if you commit *inside* `.claude/`, in whatever pre-commit that inner repo wires up. Keep tokens out of tracked `.claude/` files regardless.
 
 Operational consequences:
 - **Fresh parent clone**: `git -C ~ submodule update --init` populates it (along with the others). No build step — it's pure config.
 - **Editing inside it**: commit in the inner repo first (`git -C ~/.claude add … && git -C ~/.claude commit`), then the parent shows `modified: .claude` (gitlink SHA changed). To bless: `git -C ~ add .claude && git -C ~ commit`. To revert to the pinned SHA: `git -C ~ submodule update .claude`.
-- **The worktree-guard hook** (`~/.claude/hooks/worktree-guard.sh`) lives *inside* this submodule but guards the *parent* worktree — editing it means editing the submodule, then blessing the new SHA in the parent.
 - Tool/skill-internal guidance belongs in `.claude/`'s own docs (its `CLAUDE.md`, per-skill `SKILL.md`), not this file. This file only documents the submodule *relationship*.
 
 ## Keyboard remapping (keyd)
@@ -118,10 +117,9 @@ Subject line style is loose: `<area>: <verb> <thing>` for substantive commits (`
 
 ## Hooks and multi-agent infra
 
-Five hooks at [`~/.claude/hooks/`](.claude/hooks/) are wired into [`settings.json`](.claude/settings.json) — see the "Active hooks" section in global [`~/.claude/CLAUDE.md`](.claude/CLAUDE.md). Note `.claude/` is itself a submodule now (see the [.claude section](#claude-claude-code-config--skills-as-a-submodule)) — these files live in `claude-for-fenrir.git`, not the parent repo's index. Most relevant when editing in this repo:
+Four hooks at [`~/.claude/hooks/`](.claude/hooks/) are wired into [`settings.json`](.claude/settings.json) — see the "Active hooks" section in global [`~/.claude/CLAUDE.md`](.claude/CLAUDE.md). Note `.claude/` is itself a submodule now (see the [.claude section](#claude-claude-code-config--skills-as-a-submodule)) — these files live in `claude-for-fenrir.git`, not the parent repo's index. Most relevant when editing in this repo:
 
-- **`worktree-guard.sh`** blocks Write/Edit outside the current worktree (exit 2). If it fires, surface the block, do not retry.
-- This repo doesn't normally use worktrees, but cross-pane MQ / tmux-talk traffic can route an edit request from another pane into this one.
+- A retired `worktree-guard.sh` script still sits in the hooks dir but is **not** wired — cross-worktree edit safety is now pure discipline (the per-session `pwd && git worktree list` check at the top of the global CLAUDE.md's Multi-session discipline section).
 - Editing a hook = editing the `.claude` submodule: commit there first, then bless the new gitlink SHA in the parent (`git -C ~ add .claude && git -C ~ commit`).
 
 ## Git pre-commit guard

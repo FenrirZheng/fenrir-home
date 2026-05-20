@@ -105,11 +105,14 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-export EDITOR='emacsclient -t -a "" '
+export EDITOR='emacsclient -t -a ""'
 export VISUAL='emacsclient -t -a ""'
 
-# open emacs on  terminal as default
-alias emacs='emacs -nw'
+# Always go through the daemon.  `-t' = TTY frame; `-a ""' = if no daemon is
+# running, spawn one (`emacs --daemon') and connect to it.  The previous
+# `alias emacs='emacs -nw'' bypassed the daemon entirely and opened a fresh
+# standalone Emacs each time -- silently fragmenting buffer/history/state.
+alias emacs='emacsclient -t -a ""'
 
 
 # debain system fd naming as fdfind
@@ -141,7 +144,18 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 export PATH="$PATH:/home/fenrir/.foundry/bin"
-alias claude="claude --dangerously-skip-permissions"
+
+
+# bash complete
+
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+
 
 # pnpm
 export PNPM_HOME="/home/fenrir/.local/share/pnpm"
