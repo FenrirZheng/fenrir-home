@@ -36,3 +36,9 @@ export PATH="$PATH:/home/fenrir/.local/share/JetBrains/Toolbox/scripts"
 # node on PATH. Interactive shells additionally source it via .bashrc.
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Machine-local environment / secrets — UNTRACKED. Keep secrets OUT of this
+# tracked file; put them in ~/.profile.local instead. Currently holds
+# GEMINI_API_KEY for aider / aidermacs (see ~/.emacs.d/lisp/init-aidermacs.el).
+# Keep this line last so local overrides win.
+[ -f "$HOME/.profile.local" ] && . "$HOME/.profile.local"

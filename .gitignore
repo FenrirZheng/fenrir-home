@@ -75,3 +75,4 @@
 /.tmux/plugins/*
 !/.tmux/plugins/tmux-jump-rust
 !/.tmux/plugins/INDEX.md
+.aider*
