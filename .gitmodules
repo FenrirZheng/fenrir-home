@@ -1,6 +1,3 @@
-[submodule ".tmux/plugins/tmux-jump-rust"]
-	path = .tmux/plugins/tmux-jump-rust
-	url = git@github.com:FenrirZheng/tmux-ace-jump.git
 [submodule "fenrir-tools/claud-chat-acp"]
 	path = fenrir-tools/claud-chat-acp
 	url = git@github.com:FenrirZheng/claud-chat-acp.git
@@ -31,3 +28,6 @@
 [submodule ".config/fcitx5"]
 	path = .config/fcitx5
 	url = git@github.com:FenrirZheng/fenrir-fcitx5.git
+[submodule ".tmux"]
+	path = .tmux
+	url = git@github.com:FenrirZheng/config-tmux.git
