@@ -105,15 +105,28 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-export EDITOR='emacsclient -t -a ""'
-export VISUAL='emacsclient -t -a ""'
+# EDITOR points at a wrapper script, NOT directly at `emacsclient -t -a ""'.
+# Claude Code's Ctrl+G launches $EDITOR via naive `EDITOR.split(" ")' +
+# shell-less `spawnSync', so a bare `-a ""' would reach emacsclient as the
+# LITERAL two-char string `""' and break the daemon-autostart fallback whenever
+# no daemon is running.  Routing through ~/.local/bin/claude-editor (a real
+# bash script) restores correct `-a ""' parsing for every consumer (git,
+# Claude, etc.) while keeping the daemon semantics described below.
+export EDITOR="$HOME/.local/bin/claude-editor"
+export VISUAL="$HOME/.local/bin/claude-editor"
 
-# Always go through the daemon.  `-t' = TTY frame; `-a ""' = if no daemon is
-# running, spawn one (`emacs --daemon') and connect to it.  The previous
-# `alias emacs='emacs -nw'' bypassed the daemon entirely and opened a fresh
-# standalone Emacs each time -- silently fragmenting buffer/history/state.
+# Always go through the daemon.  `-a ""' = if no daemon is running, spawn one
+# (`emacs --daemon') and connect to it.  The previous `alias emacs='emacs -nw''
+# bypassed the daemon entirely and opened a fresh standalone Emacs each time
+# -- silently fragmenting buffer/history/state.
+#
+#   emacs-tui : `-t' attaches a frame INSIDE the current terminal (blocks).
+#   emacs-gui : `-c' opens a new GUI frame (blocks too -- suffix with ` &'
+#               from the terminal if you want the prompt back immediately,
+#               or use `emacsclient -nc' for a fire-and-forget variant).
 alias emacs='emacsclient -t -a ""'
-
+alias emacs-tui='emacsclient -t -a ""'
+alias emacs-gui='emacsclient -c -a ""'
 
 # debain system fd naming as fdfind
 # sudo apt install bfs
@@ -167,3 +180,7 @@ esac
 
 #  eval "$(zoxide init bash)" , folder dictionary
 eval "$(zoxide init bash)"
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/fenrir/.local/bin:$PATH"

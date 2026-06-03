@@ -42,3 +42,7 @@ export NVM_DIR="$HOME/.nvm"
 # GEMINI_API_KEY for aider / aidermacs (see ~/.emacs.d/lisp/init-aidermacs.el).
 # Keep this line last so local overrides win.
 [ -f "$HOME/.profile.local" ] && . "$HOME/.profile.local"
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/fenrir/.local/bin:$PATH"

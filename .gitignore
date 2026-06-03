@@ -68,11 +68,3 @@
 !/.gemini/bin/talk_claude.sh
 !/.gemini/skills/
 !/.gemini/skills/**
-
-# ============================================================
-# .tmux/plugins/: TPM owns most plugins; we track tmux-jump-rust submodule + INDEX
-# ============================================================
-/.tmux/plugins/*
-!/.tmux/plugins/tmux-jump-rust
-!/.tmux/plugins/INDEX.md
-.aider*
