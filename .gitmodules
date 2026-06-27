@@ -31,3 +31,6 @@
 [submodule ".tmux"]
 	path = .tmux
 	url = git@github.com:FenrirZheng/config-tmux.git
+[submodule ".emacs.d"]
+	path = .emacs.d
+	url = git@github.com:FenrirZheng/emacs-config.git
