@@ -12,6 +12,27 @@ case $- in
       *) return;;
 esac
 
+# --- Auto-enter tmux for interactive shells -------------------------------
+# Attach to the most-recently-used session if one exists, otherwise start a
+# fresh one. Placed right after the interactive guard so it runs BEFORE the
+# heavy sdkman/nvm/zoxide init below -- `exec` replaces this process, and the
+# tmux inner shell re-sources ~/.bashrc in full, so loading them here first
+# would just be wasted work in the throwaway outer shell.
+# Guards:
+#   $TMUX empty          : not already inside tmux (avoids nesting / recursion)
+#   NO_TMUX unset        : escape hatch -> `NO_TMUX=1 bash` skips this
+#   INSIDE_EMACS unset   : don't hijack Emacs term/eshell/vterm buffers
+#   TERM not screen/tmux : belt-and-suspenders against re-entry
+if command -v tmux >/dev/null 2>&1 \
+   && [ -z "$TMUX" ] && [ -z "$NO_TMUX" ] && [ -z "$INSIDE_EMACS" ] \
+   && [[ "$TERM" != screen* && "$TERM" != tmux* ]]; then
+    if tmux has-session 2>/dev/null; then
+        exec tmux attach-session
+    else
+        exec tmux new-session
+    fi
+fi
+
 # don't put duplicate lines or lines starting with space in the history.
 # See bash(1) for more options
 HISTCONTROL=ignoreboth
