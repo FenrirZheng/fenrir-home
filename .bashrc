@@ -23,8 +23,12 @@ esac
 #   NO_TMUX unset        : escape hatch -> `NO_TMUX=1 bash` skips this
 #   INSIDE_EMACS unset   : don't hijack Emacs term/eshell/vterm buffers
 #   TERM not screen/tmux : belt-and-suspenders against re-entry
+#   stdin is a tty       : never exec tmux from a tty-less spawn like
+#                          exec-path-from-shell's `bash -l -i -c` (attach
+#                          fails "not a terminal" and kills the PATH harvest)
 if command -v tmux >/dev/null 2>&1 \
    && [ -z "$TMUX" ] && [ -z "$NO_TMUX" ] && [ -z "$INSIDE_EMACS" ] \
+   && [ -t 0 ] \
    && [[ "$TERM" != screen* && "$TERM" != tmux* ]]; then
     if tmux has-session 2>/dev/null; then
         exec tmux attach-session
