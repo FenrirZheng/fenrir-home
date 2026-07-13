@@ -130,15 +130,26 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-# EDITOR points at a wrapper script, NOT directly at `emacsclient -t -a ""'.
+# EDITOR/VISUAL point at wrapper scripts, NOT directly at `emacsclient -t -a ""'.
 # Claude Code's Ctrl+G launches $EDITOR via naive `EDITOR.split(" ")' +
 # shell-less `spawnSync', so a bare `-a ""' would reach emacsclient as the
 # LITERAL two-char string `""' and break the daemon-autostart fallback whenever
-# no daemon is running.  Routing through ~/.local/bin/claude-editor (a real
-# bash script) restores correct `-a ""' parsing for every consumer (git,
-# Claude, etc.) while keeping the daemon semantics described below.
+# no daemon is running.  Routing through a real bash script restores correct
+# `-a ""' parsing for every consumer (git, Claude, etc.) while keeping the
+# daemon semantics described below.
+#
+# The split follows the POSIX convention: VISUAL is the full-screen/graphical
+# editor, EDITOR the terminal fallback.  Tools that honour VISUAL first (git,
+# Claude Code's transcript-viewer `v') therefore get a GUI Emacs frame; anything
+# that only reads EDITOR stays in the terminal.  claude-editor-gui degrades to a
+# terminal frame when there is no display (ssh / bare tty).
+#
+# Both paths below are symlinks into the .claude submodule, where the real
+# scripts live -- [claude-editor](.claude/bin/claude-editor) and
+# [claude-editor-gui](.claude/bin/claude-editor-gui) -- same layout as the mq*
+# helpers.
 export EDITOR="$HOME/.local/bin/claude-editor"
-export VISUAL="$HOME/.local/bin/claude-editor"
+export VISUAL="$HOME/.local/bin/claude-editor-gui"
 
 # Always go through the daemon.  `-a ""' = if no daemon is running, spawn one
 # (`emacs --daemon') and connect to it.  The previous `alias emacs='emacs -nw''

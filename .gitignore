@@ -51,6 +51,8 @@
 /.local/*
 !/.local/bin/
 /.local/bin/*
+!/.local/bin/claude-editor
+!/.local/bin/claude-editor-gui
 !/.local/bin/mqpub
 !/.local/bin/mqsend
 !/.local/bin/mqstop
