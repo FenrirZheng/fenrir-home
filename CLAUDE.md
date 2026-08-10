@@ -120,10 +120,7 @@ Subject line style is loose: `<area>: <verb> <thing>` for substantive commits (`
 
 ## Hooks and multi-agent infra
 
-Four hooks at [`~/.claude/hooks/`](.claude/hooks/) are wired into [`settings.json`](.claude/settings.json) — see the "Active hooks" section in global [`~/.claude/CLAUDE.md`](.claude/CLAUDE.md). Note `.claude/` is itself a submodule now (see the [.claude section](#claude-claude-code-config--skills-as-a-submodule)) — these files live in `claude-for-fenrir.git`, not the parent repo's index. Most relevant when editing in this repo:
-
-- A retired `worktree-guard.sh` script still sits in the hooks dir but is **not** wired — cross-worktree edit safety is now pure discipline (the per-session `pwd && git worktree list` check at the top of the global CLAUDE.md's Multi-session discipline section).
-- Editing a hook = editing the `.claude` submodule: commit there first, then bless the new gitlink SHA in the parent (`git -C ~ add .claude && git -C ~ commit`).
+The hooks at [`~/.claude/hooks/`](.claude/hooks/) wired into [`settings.json`](.claude/settings.json) are inventoried (including retired, unwired scripts) in the "Active hooks" section of global [`~/.claude/CLAUDE.md`](.claude/CLAUDE.md). Note `.claude/` is itself a submodule now (see the [.claude section](#claude-claude-code-config--skills-as-a-submodule)) — these files live in `claude-for-fenrir.git`, not the parent repo's index. Editing a hook = editing the `.claude` submodule: commit there first, then bless the new gitlink SHA in the parent (`git -C ~ add .claude && git -C ~ commit`).
 
 ## Git pre-commit guard
 
