@@ -36,12 +36,11 @@
 **/Thumbs.db
 
 # ============================================================
-# .config/: every tracked subtree is a per-app submodule
-# (FenrirZheng/fenrir-{alacritty,autostart,environment-d,fcitx5,keyd,systemd}).
-# `/.config/*` denies the directory walk; submodule gitlinks override the deny
-# because they're tracked via the index, not by walking the working tree.
-# Runtime state (fcitx5 cached_layouts, third-party .desktop drops in autostart,
-# etc.) is handled by each submodule's own .gitignore — no whitelist here.
+# .config/: independent per-app git repos live here
+# (see GITS.org for the full list and remotes).
+# They are NOT tracked by the parent dotfiles repo — hidden by
+# status.showUntrackedFiles=no. The deny rule below prevents
+# accidental `git add .config/` from sweeping in app state.
 # ============================================================
 /.config/*
 

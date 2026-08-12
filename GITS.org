@@ -1,0 +1,32 @@
+#+TITLE: Related Git Repositories
+#+DESCRIPTION: Independent git repos that live under $HOME alongside the dotfiles repo.
+#+DESCRIPTION: Previously tracked as submodules; now standalone clones.
+#+DESCRIPTION: The parent dotfiles repo does NOT track these — they are hidden by
+#+DESCRIPTION: =status.showUntrackedFiles=no=.
+
+* Config repos
+
+| local path               | remote                                          | description                          | build / notes                      |
+|---------------------------+-------------------------------------------------+--------------------------------------+------------------------------------|
+| =~/.claude/=              | =git@github.com:FenrirZheng/claude-for-fenrir.git= | Claude Code config + skills          | pure config, no build              |
+| =~/.tmux/=                | =git@github.com:FenrirZheng/config-tmux.git=       | tmux config + Rust toolset + plugins | =cargo build --release= in =tools/= |
+| =~/.emacs.d/=             | =git@github.com:FenrirZheng/emacs-config.git=      | Emacs config                         | pure config                        |
+| =~/.config/alacritty/=    | =git@github.com:FenrirZheng/fenrir-alacritty.git=  | Alacritty terminal config            | pure config                        |
+| =~/.config/autostart/=    | =git@github.com:FenrirZheng/fenrir-autostart.git=  | XDG autostart entries                | pure config                        |
+| =~/.config/environment.d/= | =git@github.com:FenrirZheng/fenrir-environment-d.git= | systemd environment.d config      | pure config                        |
+| =~/.config/fcitx5/=       | =git@github.com:FenrirZheng/fenrir-fcitx5.git=     | fcitx5 input method config           | pure config                        |
+| =~/.config/keyd/=         | =git@github.com:FenrirZheng/fenrir-keyd.git=       | keyd keyboard remap config           | deploy: =sudo cp default.conf /etc/keyd/= |
+| =~/.config/systemd/=      | =git@github.com:FenrirZheng/fenrir-systemd.git=    | user systemd units                   | =systemctl --user= managed         |
+
+* CLI tool repos
+
+| local path                            | remote                                                | description                        | build                              | symlink                                    |
+|---------------------------------------+-------------------------------------------------------+------------------------------------+------------------------------------+--------------------------------------------|
+| =~/fenrir-tools/claud-chat-acp/=      | =git@github.com:FenrirZheng/claud-chat-acp.git=      | Rust ACP client (=claud-chat= bin) | =cargo build --release=            | =~/.local/bin/claud-chat= → =target/release/claud-chat= |
+| =~/fenrir-tools/claude-agentic-chat/= | =git@github.com:FenrirZheng/claude-agentic-chat.git= | Node Claude Agent SDK chat         | =npm install && npm run build=     | =~/.local/bin/claude-chat= → =dist/index.js= |
+
+* Unrelated clones (not managed by this file)
+
+Repos under =~/code/=, =~/WebstormProjects/=, =~/Documents/= are independent
+clones unrelated to the dotfiles repo. They are not listed here because they
+have no operational relationship with the home-directory config.
