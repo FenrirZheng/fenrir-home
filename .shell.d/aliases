@@ -30,18 +30,5 @@ alias flameshot-gui='flameshot gui'
 # files; ~1s input blip. (Diagnosed 2026-05-10 — chewing candidate ↓ stopped working.)
 alias im-restart='fcitx5 --replace -d'
 
-# ── ripgrep: block grep muscle-memory `-r`. rg recurses by default; its short -r
-# is --replace, so `rg -rn PAT` replaces every match with literal "n" (incident
-# 2026-08-06). Real replacements must spell out --replace=STR. This guard covers
-# both the interactive shell and Claude Code's Bash tool (shell snapshot).
-rg() {
-  local a
-  for a in "$@"; do
-    [[ $a == -- ]] && break
-    if [[ $a == -r* || $a =~ ^-[a-zA-Z]+r$ ]]; then
-      printf 'rg guard: refusing short -r (%s) — rg is recursive by default; -r means --replace.\nDrop it, or spell out --replace=STR if you really mean replacement.\n' "$a" >&2
-      return 2
-    fi
-  done
-  command rg "$@"
-}
+# (the old short--r guard that lived here moved to a Claude PreToolUse hook:
+#  ~/.claude/hooks/rg-guard.sh — it also covers xargs / bash -c / compound forms)
