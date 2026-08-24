@@ -94,7 +94,22 @@ Subject line style is loose: `<area>: <verb> <thing>` for substantive commits (`
 
 ## Git pre-commit guard
 
-Tracked at [`.githooks/pre-commit`](.githooks/pre-commit), wired per-clone via `git config core.hooksPath .githooks`. After a fresh clone you must re-run that command — `core.hooksPath` is a local config, not tracked in `.git/config` outside the clone.
+> ⚠️ **NOT CURRENTLY WIRED — this guard does not run.** Measured 2026-08-18:
+> `git -C ~ config --get core.hooksPath` returns **`/home/fenrir/.git/hooks`**,
+> not `.githooks`, and that directory holds only `*.sample`. So no pre-commit
+> check runs on this clone today, and nothing below is in force until the wiring
+> command is re-run. The rest of this section describes the hook's *design*, kept
+> because the file is still tracked and still works if re-enabled.
+>
+> **A hook's failure mode is silence** — same shape as the `$CLAUDE_TOOL_INPUT`
+> incident recorded in [`.claude/CLAUDE.md`](.claude/CLAUDE.md#active-hooks-claudehooks),
+> where two hooks blocked nothing for months while a table claimed they did. A
+> document asserting a guard is active is not evidence that it is; only reading
+> the config is.
+
+Tracked at [`.githooks/pre-commit`](.githooks/pre-commit), wired per-clone via `git config core.hooksPath .githooks`. After a fresh clone you must re-run that command — `core.hooksPath` is a local config, not tracked in `.git/config` outside the clone. **That is exactly how it came to be un-wired here**: the setting is per-clone and nothing re-applies it.
+
+The hook resolves its scanner as `$repo_root/.local/bin/gitleaks`, i.e. *relative to the repo it runs in*, and `exit 1`s if that path is not executable. It therefore only works in this `$HOME` clone — pointing another repo's `core.hooksPath` at it would not scan anything, it would **block every commit there** with a "not found" failure.
 
 One check, fatal:
 
@@ -102,25 +117,48 @@ One check, fatal:
 
 Coverage caveat: gitleaks regex catches **high-confidence patterns** like `password: 6Qr...`, `AKIA...`, `ghp_...`. It does NOT catch free-form password comments (`# pwd: foo`, `## user x/y`). Don't rely on gitleaks alone — keep secrets out of tracked files entirely. The original audit of `.ssh/config` found ~20 such free-form leaks; that file remains untracked (now via `showUntrackedFiles=no` rather than an explicit ignore rule) pending the `Include ~/.ssh/config.local` split.
 
-If the hook blocks a commit: read the failure mode and fix the underlying issue. Per global rule, do not reach for `--no-verify`.
+If the hook blocks a commit: read the failure mode and fix the underlying issue. Do not reach for `--no-verify`.
 
 ## Fresh-clone bootstrap
 
 After cloning into `$HOME` on a new machine:
 
 1. `git -C ~ config status.showUntrackedFiles no` — hide the ~1M `$HOME` items the repo doesn't track. Without this, `git status` is unusable.
-2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked).
+2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked). **Optional, and currently NOT applied on this machine** — see the [pre-commit guard section](#git-pre-commit-guard). Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
 3. Clone all related repos listed in [`GITS.org`](GITS.org) to their expected paths (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/{alacritty,autostart,environment.d,fcitx5,keyd,systemd}`, `fenrir-tools/{claud-chat-acp,claude-agentic-chat}`).
 4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, `cargo build --release` in `~/.tmux/tools`.
 5. fenrir-tools: build both CLIs, recreate symlinks — see [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools).
-6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required by the pre-commit hook.
+6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required **only if** you wired the hook in step 2; it is also useful on its own for a manual `gitleaks git --staged` run.
 7. Keyboard remap: install `keyd`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
+8. Terminal font: install **DejaVuSansM Nerd Font** (font files, not tracked anywhere — same class of manual dependency as gitleaks). `~/.config/alacritty/alacritty.toml` names the plain variant (`DejaVuSansM Nerd Font`, deliberately NOT `…Mono` — Mono shrinks icons into one cell), and without the font the tmux status bar's powerline caps and PUA icons degrade to overlapping tofu (the 2026-08-24 incident that motivated this step):
 
-Verify with `git -C ~ status` (should be clean, with the `(use -u to show untracked files)` hint) and an empty commit through the hook (`git -C ~ commit --allow-empty -m test && git -C ~ reset --soft HEAD~1`).
+   ```bash
+   mkdir -p ~/.local/share/fonts/DejaVuSansMNerdFont
+   curl -sL -o /tmp/DejaVuSansMono.zip \
+     https://github.com/ryanoasis/nerd-fonts/releases/latest/download/DejaVuSansMono.zip
+   unzip -oq /tmp/DejaVuSansMono.zip -d ~/.local/share/fonts/DejaVuSansMNerdFont 'DejaVuSansMNerdFont*.ttf'
+   fc-cache -f ~/.local/share/fonts
+   ```
+
+   (Release asset is named `DejaVuSansMono.zip`; the family inside is `DejaVuSansM Nerd Font`.)
+
+Verify with `git -C ~ status` (should be clean, with the `(use -u to show untracked files)` hint).
+
+If you chose to wire the hook in step 2, verify **that it actually runs** — an
+empty commit succeeds identically whether the hook fires or not, so on its own it
+proves nothing:
+
+```bash
+git -C ~ config --get core.hooksPath          # must print .githooks
+git -C ~ commit --allow-empty -m test 2>&1 | grep 'pre-commit: gitleaks'
+git -C ~ reset --soft HEAD~1
+```
+
+Absence of that `pre-commit: gitleaks` line means the guard is not in the path,
+whatever the config says.
 
 ## Don't
 
-- Don't `git push` or open PRs (per global rule).
 - **Never `git add .` or `git add -A` at `$HOME`.** Under `showUntrackedFiles=no` it's tempting because `git status` looks clean, but `add .` ignores that config — it walks the actual filesystem and would try to stage everything not gitignored. The slim `.gitignore` only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list — they were untracked-by-config, not untracked-by-rule. `git add <specific-path>` always; never the cwd shortcut.
 - Don't repopulate the old `$HOME`-root deny list in `.gitignore`. It was deliberately deleted in the `e5d70b7` rebuild — the config-based hide replaces it. If you find yourself wanting to add `/.someapp/` to ignore-noise, the answer is "it's already hidden, you're looking at `git status -uall` output".
 - Don't restore `/.config/fcitx5/conf/cached_layouts` to tracked. fcitx5 rewrites it on every run; the rebuild intentionally dropped it. If `git status -uall` shows it as untracked, that's correct — let fcitx5 own it.
