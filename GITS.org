@@ -17,6 +17,7 @@
 | =~/.config/fcitx5/=       | =git@github.com:FenrirZheng/fenrir-fcitx5.git=     | fcitx5 input method config           | pure config                        |
 | =~/.config/keyd/=         | =git@github.com:FenrirZheng/fenrir-keyd.git=       | keyd keyboard remap config           | deploy: =sudo cp default.conf /etc/keyd/= |
 | =~/.config/systemd/=      | =git@github.com:FenrirZheng/fenrir-systemd.git=    | user systemd units                   | =systemctl --user= managed         |
+| =~/code/nicro-skill/=     | (none yet — local only)                            | =nicro= Claude Code plugin (17 skills) | =claude plugin marketplace add ~/code/nicro-skill= then enable; =~/.claude/settings.json= references this path |
 
 * CLI tool repos
 
@@ -29,4 +30,6 @@
 
 Repos under =~/code/=, =~/WebstormProjects/=, =~/Documents/= are independent
 clones unrelated to the dotfiles repo. They are not listed here because they
-have no operational relationship with the home-directory config.
+have no operational relationship with the home-directory config. Exception:
+=~/code/nicro-skill/= is listed above — =~/.claude/settings.json= points at it
+as a plugin marketplace, so it is operationally part of the config.
