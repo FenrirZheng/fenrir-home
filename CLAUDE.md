@@ -21,19 +21,31 @@ Inside that repo, three kinds of content:
 
 - **TPM-managed plugins (untracked)** — `tpm`, `tmux-sensible`, `tmux-thumbs`, `tokyo-night-tmux`. Declared with `set -g @plugin` in [`tmux.conf`](.tmux/tmux.conf) and excluded **one line per plugin** in [`.tmux/.gitignore`](.tmux/.gitignore) (there's no `plugins/*` blanket — the in-repo plugin below has to stay visible). TPM re-clones them on `prefix + I`; local edits are throwaway, `prefix + U` overwrites them.
 - **In-repo plugin (tracked as ordinary files)** — [`plugins/tmux-ace-window/`](.tmux/plugins/tmux-ace-window), the user's own bash ace-window port (`prefix + o` select / `prefix + O` swap). Not TPM-managed: `tmux.conf` loads it with an explicit `run-shell`, because its `@ace-window-*` options must be set before the loader runs.
-- **Toolset (Rust)** — [`tools/`](.tmux/tools) is a tracked cargo workspace: `cc-attend`, `cc-beacon`, `cc-fleet`, `cc-launch`, `cc-layout`, `cc-tape`, `seek`, `sift`, `talk-fleet`, `to-claude`, `to-emacs`, `tmuxlib`. [`claude.conf`](.tmux/claude.conf) binds keys straight at `tools/target/release/<bin>`, so those keys are dead until it has been built:
+- **Toolset (Rust, plus one C++ tool)** — [`tools/`](.tmux/tools) is a tracked cargo workspace (`cc-attend`, `cc-beacon`, `cc-fleet`, `cc-launch`, `cc-layout`, `cc-tape`, `seek`, `talk-fleet`, `to-claude`, `to-emacs`, `tmuxlib`) **plus `sift`, which is C++ and builds with cmake, not cargo** (user directive, 2026-08-27). [`claude.conf`](.tmux/claude.conf) binds keys straight at `tools/target/release/<bin>`, so those keys are dead until *both* builds have run:
 
   ```bash
   cd ~/.tmux/tools
   cargo build --release
+  cd sift && cmake --preset release && cmake --build --preset release
   ```
 
-  `sift` was the one exception — C++ built by cmake into the same `target/release/`, which cost a second build system on every fresh clone and made `cargo clean` silently delete its binary. It was **ported to Rust on 2026-08-31** and is now an ordinary workspace member ([ADR-0006](.tmux/docs/adr/0006-port-sift-from-cpp-to-rust.org)); cmake, the C++20 compiler requirement and the `cargo clean` footgun are all gone with it. `target/` is excluded by [`tools/.gitignore`](.tmux/tools/.gitignore) — don't duplicate the rule in the root one. Read [`tools/ARCHITECTURE.org`](.tmux/tools/ARCHITECTURE.org) before editing any crate; it has a per-tool atlas at [`tools/atlas/`](.tmux/tools/atlas) to read first.
+  The cmake half goes through [`sift/CMakePresets.json`](.tmux/tools/sift/CMakePresets.json),
+  which pins the Ninja generator and the build directory. Ninja is a
+  convenience, not a requirement — it does **not** speed up this compile (one
+  translation unit: 2446 ms vs make's 2434 ms, measured), it makes the *no-op*
+  rebuild 16 ms instead of 56 ms. Without `ninja`, or on cmake < 3.21, the
+  generator-less form builds the identical binary:
+
+  ```bash
+  cmake -S sift -B target/cmake-build -DCMAKE_BUILD_TYPE=Release && cmake --build target/cmake-build
+  ```
+
+  cmake deliberately writes its binary into the same `target/release/` as cargo, so `claude.conf` keeps one path shape for every tool. The cost of sharing that directory: **`cargo clean` deletes `sift` too** — re-run the cmake line, not just `cargo build`. `target/` is excluded by [`tools/.gitignore`](.tmux/tools/.gitignore), which already covers the cmake build tree and output — no new ignore rule, and don't duplicate the rule in the root one. Read [`tools/ARCHITECTURE.org`](.tmux/tools/ARCHITECTURE.org) before editing any crate; it has a per-tool atlas at [`tools/atlas/`](.tmux/tools/atlas) to read first.
 
 Operational consequences:
 - **Reload after editing config**: `tmux source-file ~/.tmux.conf` — re-runs TPM plus the explicit `run-shell` loaders (thumbs, ace-window, `claude.conf`).
 - **Adding an upstream plugin**: add the `@plugin` line, `prefix + I`, **then add its directory to [`.tmux/.gitignore`](.tmux/.gitignore)** — the exclusions are per-plugin, so a newly cloned one shows up as untracked in `git -C ~/.tmux status` until you list it.
-- **Fresh machine**: clone the tmux config repo to `~/.tmux/`, then `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, and `cargo build --release` in `~/.tmux/tools` — skip that build and `prefix /` stays bound to a "sift: not built" stub. See [`GITS.org`](GITS.org) for the remote URL.
+- **Fresh machine**: clone the tmux config repo to `~/.tmux/`, then `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, and run *both* build commands above in `~/.tmux/tools` — `cargo build --release` alone leaves `prefix /` bound to a "sift: not built" stub. See [`GITS.org`](GITS.org) for the remote URL.
 - tmux-side documentation lives in that repo — [`README.md`](.tmux/README.md), [`runbooks/`](.tmux/runbooks), [`docs/adr/`](.tmux/docs/adr), [`plans/`](.tmux/plans).
 
 ## fenrir-tools/: locally-developed CLI tools
@@ -133,7 +145,7 @@ After cloning into `$HOME` on a new machine:
 1. `git -C ~ config status.showUntrackedFiles no` — hide the ~1M `$HOME` items the repo doesn't track. Without this, `git status` is unusable.
 2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked). **Optional, and currently NOT applied on this machine** — see the [pre-commit guard section](#git-pre-commit-guard). Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
 3. Clone all related repos listed in [`GITS.org`](GITS.org) to their expected paths (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/{alacritty,autostart,environment.d,fcitx5,keyd,systemd}`, `fenrir-tools/{claud-chat-acp,claude-agentic-chat}`).
-4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then `cargo build --release` in `~/.tmux/tools` — one build covers every tool, `sift` included since its 2026-08-31 Rust port. No new toolchain dependency beyond cargo; `sift` needs no libraries beyond libc.
+4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then in `~/.tmux/tools` both `cargo build --release` **and** the cmake build for `sift` — see the [tmux repo section](#tmux-tmux-config-repo) for the exact two commands. A C++20 compiler (g++ ≥ 10) and `cmake` are the only *required* new dependencies; `sift` needs no libraries beyond libc. `ninja` (`apt install ninja-build`) is optional — the `cmake --preset` spelling in that section wants it, and falls back to the generator-less commands documented right below it.
 5. fenrir-tools: build both CLIs, recreate symlinks — see [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools).
 6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required **only if** you wired the hook in step 2; it is also useful on its own for a manual `gitleaks git --staged` run.
 7. Keyboard remap: install `keyd`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
