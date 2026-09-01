@@ -26,6 +26,17 @@ Inside that repo, three kinds of content:
   ```bash
   cd ~/.tmux/tools
   cargo build --release
+  cd sift && cmake --preset release && cmake --build --preset release
+  ```
+
+  The cmake half goes through [`sift/CMakePresets.json`](.tmux/tools/sift/CMakePresets.json),
+  which pins the Ninja generator and the build directory. Ninja is a
+  convenience, not a requirement — it does **not** speed up this compile (one
+  translation unit: 2446 ms vs make's 2434 ms, measured), it makes the *no-op*
+  rebuild 16 ms instead of 56 ms. Without `ninja`, or on cmake < 3.21, the
+  generator-less form builds the identical binary:
+
+  ```bash
   cmake -S sift -B target/cmake-build -DCMAKE_BUILD_TYPE=Release && cmake --build target/cmake-build
   ```
 
@@ -58,7 +69,7 @@ Tool/skill-internal guidance belongs in `.claude/`'s own docs (its `CLAUDE.md`, 
 
 ## Keyboard remapping (keyd)
 
-Physical-key remapping is done by [`keyd`](https://github.com/rvaiya/keyd) (system service, runs as root). keyd 2.5+ reads **only `/etc/keyd/*.conf`** — it does not look at `~/.config/keyd/`. So the keyd config repo at `~/.config/keyd/` carries `default.conf` as the **source of truth**; `/etc/keyd/default.conf` is a deployed copy. Deploy / re-deploy:
+Physical-key remapping is done by [`keyd`](https://github.com/rvaiya/keyd) (system service, runs as root). keyd 2.5+ reads **only `/etc/keyd/*.conf`** — it does not look at `~/.config/keyd/` (re-verify: on keyd upgrade). So the keyd config repo at `~/.config/keyd/` carries `default.conf` as the **source of truth**; `/etc/keyd/default.conf` is a deployed copy. Deploy / re-deploy:
 
 ```bash
 sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl restart keyd
@@ -134,7 +145,7 @@ After cloning into `$HOME` on a new machine:
 1. `git -C ~ config status.showUntrackedFiles no` — hide the ~1M `$HOME` items the repo doesn't track. Without this, `git status` is unusable.
 2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked). **Optional, and currently NOT applied on this machine** — see the [pre-commit guard section](#git-pre-commit-guard). Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
 3. Clone all related repos listed in [`GITS.org`](GITS.org) to their expected paths (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/{alacritty,autostart,environment.d,fcitx5,keyd,systemd}`, `fenrir-tools/{claud-chat-acp,claude-agentic-chat}`).
-4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then in `~/.tmux/tools` both `cargo build --release` **and** the cmake build for `sift` — see the [tmux repo section](#tmux-tmux-config-repo) for the exact two commands. A C++20 compiler (g++ ≥ 10) and `cmake` are the only new dependencies; `sift` needs no libraries beyond libc.
+4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then in `~/.tmux/tools` both `cargo build --release` **and** the cmake build for `sift` — see the [tmux repo section](#tmux-tmux-config-repo) for the exact two commands. A C++20 compiler (g++ ≥ 10) and `cmake` are the only *required* new dependencies; `sift` needs no libraries beyond libc. `ninja` (`apt install ninja-build`) is optional — the `cmake --preset` spelling in that section wants it, and falls back to the generator-less commands documented right below it.
 5. fenrir-tools: build both CLIs, recreate symlinks — see [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools).
 6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required **only if** you wired the hook in step 2; it is also useful on its own for a manual `gitleaks git --staged` run.
 7. Keyboard remap: install `keyd`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
