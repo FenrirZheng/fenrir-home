@@ -17,7 +17,7 @@
 | =~/.config/fcitx5/=       | =git@github.com:FenrirZheng/fenrir-fcitx5.git=     | fcitx5 input method config           | pure config                        |
 | =~/.config/keyd/=         | =git@github.com:FenrirZheng/fenrir-keyd.git=       | keyd keyboard remap config           | deploy: =sudo cp default.conf /etc/keyd/= |
 | =~/.config/systemd/=      | =git@github.com:FenrirZheng/fenrir-systemd.git=    | user systemd units                   | =systemctl --user= managed         |
-| =~/code/nicro-skill/=     | (none yet — local only)                            | =nicro= Claude Code plugin (17 skills) | =claude plugin marketplace add ~/code/nicro-skill= then enable; =~/.claude/settings.json= references this path |
+| =~/code/nicro-skill/=     | =git@github.com:FenrirZheng/nicro-skills.git=      | =nicro= Claude Code plugin (17 skills) | =claude plugin marketplace add ~/code/nicro-skill= then enable; =~/.claude/settings.json= references this path |
 
 * CLI tool repos
 
