@@ -4,18 +4,17 @@ Project-level guidance for `/home/fenrir`, a single-machine **home-directory dot
 
 ## Repo shape
 
-- Working tree is the entire home directory. Multiple independent git repos live under `$HOME` (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/{alacritty,autostart,environment.d,fcitx5,keyd,systemd}`, `fenrir-tools/`, plus unrelated clones in `code/`, `WebstormProjects/`, `Documents/`). **None are submodules** — they are standalone clones hidden by `showUntrackedFiles=no`. [`GITS.org`](GITS.org) is the authoritative list of related repos (remotes, paths, build instructions).
-- **Strategy: `status.showUntrackedFiles=no` + slim deny-then-whitelist `.gitignore`** (rebuilt 2026-05-09, root commit `e5d70b7`). The repo's history before that commit was discarded — only one user, no collaborators, so the rebuild was free.
-  - **`$HOME` root noise** (caches, creds, IDE state, language toolchains, nested project repos, app state) is hidden by `git config status.showUntrackedFiles no`, NOT by `.gitignore` rules. The previous `$HOME`-root deny list was unmaintainable: `git status -uall` shows ~1M untracked items, every new app drops a new dir to chase. The config-based hide makes that whole problem disappear.
-  - **`.local/`, `.gemini/`**: deny-then-whitelist. Even with untracked-hidden, these dirs need positive containment so `git add <dir>` doesn't sweep in `oauth_creds.json`-style siblings. Explicit `!`-rule per file/subdir we want. **`.config/`** is plain deny (`/.config/*`, no whitelist) — per-app config repos live there as independent clones (see [`GITS.org`](GITS.org)); the deny rule prevents accidental sweeps.
-  - **`.ssh/`** stays untracked because `showUntrackedFiles=no` hides it — there's no longer an explicit `/.ssh/` rule in `.gitignore`. `~/.ssh/config` still has ~25 plaintext password comments + production hostnames across multiple work clients; the deferred follow-up is to split it via `Include ~/.ssh/config.local` (sanitized main file tracked, sensitive lines in untracked `.local`). Until that split happens, `.ssh/` remains opaque to the repo.
-  - **To inspect what's hidden**: `git status -uall` is the one-shot opt-in. Don't make it the default — it dumps a million entries.
+- Working tree is the entire home directory. Multiple independent git repos live under `$HOME` (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/{alacritty,autostart,environment.d,fcitx5,keyd,systemd}`, `fenrir-tools/`, plus unrelated clones in `code/`, `WebstormProjects/`, `Documents/`). **None are submodules** — they are standalone clones, and they show up as untracked entries in `git status`. [`GITS.org`](GITS.org) is the authoritative list of related repos (remotes, paths, build instructions).
+- **Strategy: `status.showUntrackedFiles=normal` + slim deny-then-whitelist `.gitignore`** (user decision 2026-09-02; it was `no` from the 2026-05-09 rebuild, root commit `e5d70b7`, until then). The repo's history before that commit was discarded — only one user, no collaborators, so the rebuild was free.
+  - **`$HOME` root noise** (caches, creds, IDE state, language toolchains, nested project repos, app state) is left visible as untracked, NOT covered by `.gitignore` rules. `git status` collapses whole untracked directories, so it lists **237 top-level `??` entries in 0.013 s**; `-uall` expands the same tree to **1,250,405 entries in 12.7 s** (probe: `git -C /home/fenrir status --porcelain [-uall] | grep -c '^??'`, git 2.47.3, 2026-09-02). Only the collapsed form is usable day to day — don't make `-uall` the default.
+  - **`.local/`, `.gemini/`**: deny-then-whitelist. These dirs need positive containment so `git add <dir>` doesn't sweep in `oauth_creds.json`-style siblings. Explicit `!`-rule per file/subdir we want. **`.config/`** is plain deny (`/.config/*`, no whitelist) — per-app config repos live there as independent clones (see [`GITS.org`](GITS.org)); the deny rule prevents accidental sweeps.
+  - **`.ssh/`** has no `.gitignore` rule of its own and stays untracked — it simply appears in `git status` as `?? .ssh/`. `~/.ssh/config` still has ~25 plaintext password comments + production hostnames across multiple work clients; the deferred follow-up is to split it via `Include ~/.ssh/config.local` (sanitized main file tracked, sensitive lines in untracked `.local`). Until that split happens, `.ssh/` stays out of the repo.
 - For nested whitelist patterns under `.config/` etc., open **each level** (`!/.foo/`, `!/.foo/bar/`, `!/.foo/bar/**`) — git won't re-include children of an ignored parent even with `**`. See the `.gemini/` block in [`.gitignore`](.gitignore).
 - To allow a single child of an otherwise-ignored directory, exclude the **contents** with `dir/*` (not the directory itself with `dir/`), then add `!dir/child`. The trailing `/` form excludes the directory entry and git stops walking, so child whitelists silently lose. The `.gemini/bin/` and `.local/bin/` blocks use `/*` for this reason.
 
 ## `.tmux/`: tmux config repo
 
-`.tmux/` is an independent git repo (remote: `FenrirZheng/config-tmux`; see [`GITS.org`](GITS.org)). The parent dotfiles repo does NOT track it. `~/.tmux.conf` is a symlink to [`.tmux/tmux.conf`](.tmux/tmux.conf), hidden by `showUntrackedFiles=no`.
+`.tmux/` is an independent git repo (remote: `FenrirZheng/config-tmux`; see [`GITS.org`](GITS.org)). The parent dotfiles repo does NOT track it. `~/.tmux.conf` is a symlink to [`.tmux/tmux.conf`](.tmux/tmux.conf) and shows up as an untracked entry in `git -C ~ status`.
 
 Inside that repo, three kinds of content:
 
@@ -136,9 +135,9 @@ The hook resolves its scanner as `$repo_root/.local/bin/gitleaks`, i.e. *relativ
 
 One check, fatal:
 
-- **`gitleaks git --staged`** (binary at `~/.local/bin/gitleaks`, installed manually from upstream releases — not tracked) — content-based scan for credential patterns (OAuth tokens, AWS keys, private keys, GitHub PATs). With `showUntrackedFiles=no` hiding most of `$HOME`, the main risk shifts to "I deliberately `git add`ed a file that contains a token I forgot about" — gitleaks is the last-mile defense against that.
+- **`gitleaks git --staged`** (binary at `~/.local/bin/gitleaks`, installed manually from upstream releases — not tracked) — content-based scan for credential patterns (OAuth tokens, AWS keys, private keys, GitHub PATs). Nothing under `$HOME` is ever staged by accident from a `git status` glance, so the main risk is "I deliberately `git add`ed a file that contains a token I forgot about" — gitleaks is the last-mile defense against that.
 
-Coverage caveat: gitleaks regex catches **high-confidence patterns** like `password: 6Qr...`, `AKIA...`, `ghp_...`. It does NOT catch free-form password comments (`# pwd: foo`, `## user x/y`). Don't rely on gitleaks alone — keep secrets out of tracked files entirely. The original audit of `.ssh/config` found ~20 such free-form leaks; that file remains untracked (now via `showUntrackedFiles=no` rather than an explicit ignore rule) pending the `Include ~/.ssh/config.local` split.
+Coverage caveat: gitleaks regex catches **high-confidence patterns** like `password: 6Qr...`, `AKIA...`, `ghp_...`. It does NOT catch free-form password comments (`# pwd: foo`, `## user x/y`). Don't rely on gitleaks alone — keep secrets out of tracked files entirely. The original audit of `.ssh/config` found ~20 such free-form leaks; that file remains untracked — visible as `?? .ssh/`, with no ignore rule of its own — pending the `Include ~/.ssh/config.local` split.
 
 If the hook blocks a commit: read the failure mode and fix the underlying issue. Do not reach for `--no-verify`.
 
@@ -146,7 +145,7 @@ If the hook blocks a commit: read the failure mode and fix the underlying issue.
 
 After cloning into `$HOME` on a new machine:
 
-1. `git -C ~ config status.showUntrackedFiles no` — hide the ~1M `$HOME` items the repo doesn't track. Without this, `git status` is unusable.
+1. `git -C ~ config status.showUntrackedFiles normal` — the git default, so on a fresh clone there is usually nothing to do; run it only if an inherited config says otherwise. `git status` then lists the untracked `$HOME` noise with directories collapsed (see [Repo shape](#repo-shape)).
 2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked). **Optional, and currently NOT applied on this machine** — see the [pre-commit guard section](#git-pre-commit-guard). Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
 3. Clone all related repos listed in [`GITS.org`](GITS.org) to their expected paths (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/{alacritty,autostart,environment.d,fcitx5,keyd,systemd}`, `fenrir-tools/{claud-chat-acp,claude-agentic-chat}`).
 4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then in `~/.tmux/tools` both `cargo build --release` **and** the cmake build for `sift` — see the [tmux repo section](#tmux-tmux-config-repo) for the exact two commands. A C++20 compiler (g++ ≥ 10) and `cmake` are the only *required* new dependencies; `sift` needs no libraries beyond libc. `ninja` (`apt install ninja-build`) is optional — the `cmake --preset` spelling in that section wants it, and falls back to the generator-less commands documented right below it.
@@ -165,7 +164,7 @@ After cloning into `$HOME` on a new machine:
 
    (Release asset is named `DejaVuSansMono.zip`; the family inside is `DejaVuSansM Nerd Font`.)
 
-Verify with `git -C ~ status` (should be clean, with the `(use -u to show untracked files)` hint).
+Verify with `git -C ~ status`: no modified or staged files; a few hundred untracked `??` entries are expected.
 
 If you chose to wire the hook in step 2, verify **that it actually runs** — an
 empty commit succeeds identically whether the hook fires or not, so on its own it
@@ -182,8 +181,8 @@ whatever the config says.
 
 ## Don't
 
-- **Never `git add .` or `git add -A` at `$HOME`.** Under `showUntrackedFiles=no` it's tempting because `git status` looks clean, but `add .` ignores that config — it walks the actual filesystem and would try to stage everything not gitignored. The slim `.gitignore` only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list — they were untracked-by-config, not untracked-by-rule. `git add <specific-path>` always; never the cwd shortcut.
-- Don't repopulate the old `$HOME`-root deny list in `.gitignore`. It was deliberately deleted in the `e5d70b7` rebuild — the config-based hide replaces it. If you find yourself wanting to add `/.someapp/` to ignore-noise, the answer is "it's already hidden, you're looking at `git status -uall` output".
+- **Never `git add .` or `git add -A` at `$HOME`.** `add .` walks the actual filesystem and would stage every one of the ~1.25M items the slim `.gitignore` doesn't deny — and it only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list. The untracked noise being visible in `git status` is not containment. `git add <specific-path>` always; never the cwd shortcut.
+- Don't repopulate the old `$HOME`-root deny list in `.gitignore`. It was deliberately deleted in the `e5d70b7` rebuild because it was unmaintainable — every new app drops a new dir to chase. The user chose visible untracked noise over hiding or chasing it (2026-09-02), so a `??` line for `/.someapp/` is the expected state, not a bug to fix with a new ignore rule.
 - Don't restore `/.config/fcitx5/conf/cached_layouts` to tracked. fcitx5 rewrites it on every run; the rebuild intentionally dropped it. If `git status -uall` shows it as untracked, that's correct — let fcitx5 own it.
 - Don't edit `/etc/keyd/default.conf` and forget to mirror it back to `~/.config/keyd/default.conf` — the config repo copy is the source of truth, the `/etc/` one is a deploy target. See the [Keyboard remapping section](#keyboard-remapping-keyd).
 - Don't add submodule tracking back. All related repos are standalone clones listed in [`GITS.org`](GITS.org) — the parent dotfiles repo deliberately does not track them.

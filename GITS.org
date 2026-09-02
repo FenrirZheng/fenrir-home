@@ -1,8 +1,9 @@
 #+TITLE: Related Git Repositories
 #+DESCRIPTION: Independent git repos that live under $HOME alongside the dotfiles repo.
 #+DESCRIPTION: Previously tracked as submodules; now standalone clones.
-#+DESCRIPTION: The parent dotfiles repo does NOT track these — they are hidden by
-#+DESCRIPTION: =status.showUntrackedFiles=no=.
+#+DESCRIPTION: The parent dotfiles repo does NOT track these — since
+#+DESCRIPTION: =status.showUntrackedFiles=normal= (2026-09-02) they show up as untracked
+#+DESCRIPTION: entries in its =git status=.
 
 * Config repos
 
