@@ -151,6 +151,9 @@ fi
 export EDITOR="$HOME/.local/bin/claude-editor"
 export VISUAL="$HOME/.local/bin/claude-editor-gui"
 
+# 原生的RG
+export USE_BUILTIN_RIPGREP=0
+
 # Always go through the daemon.  `-a ""' = if no daemon is running, spawn one
 # (`emacs --daemon') and connect to it.  The previous `alias emacs='emacs -nw''
 # bypassed the daemon entirely and opened a fresh standalone Emacs each time
