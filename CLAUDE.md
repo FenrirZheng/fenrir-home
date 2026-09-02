@@ -32,8 +32,10 @@ Inside that repo, three kinds of content:
   The cmake half goes through [`sift/CMakePresets.json`](.tmux/tools/sift/CMakePresets.json),
   which pins the Ninja generator and the build directory. Ninja is a
   convenience, not a requirement â€” it does **not** speed up this compile (one
-  translation unit: 2446 ms vs make's 2434 ms, measured), it makes the *no-op*
-  rebuild 16 ms instead of 56 ms. Without `ninja`, or on cmake < 3.21, the
+  translation unit: ninja 2523 ms vs make 2325 ms, clean build, measured 2026-09-02 by
+  configuring each generator into a scratch dir and timing `cmake --build` with
+  `date +%s%N`), it makes the *no-op* rebuild 11 ms instead of 56 ms (same probe).
+  Without `ninja`, or on cmake < 3.21, the
   generator-less form builds the identical binary:
 
   ```bash
@@ -111,7 +113,7 @@ Input methods: fcitx5's IM list is `keyboard-us`, `rime` (default), `chewing` â€
 
 `git log --oneline` shows a preference for **small, system-scoped commits that bundle config + service** together (e.g. `ab99e2b` adds zoxide-seed shell config and the emacs daemon systemd unit in one commit). Don't split a feature's client and service halves into separate commits unless they truly are independent.
 
-Subject line style is loose: `<area>: <verb> <thing>` for substantive commits (`tmux: add TPM plugin scaffolding`), free-form (`goood`, `sh tool`) for trivial ones. Match the surrounding style of the area you're touching.
+Subject line: `<area>: <verb> <thing>` (`tmux: add TPM plugin scaffolding`). History holds free-form subjects (`goood`, `sh tool`); match the area prefix of surrounding commits, don't add more free-form ones.
 
 ## Git pre-commit guard
 
