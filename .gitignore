@@ -56,6 +56,14 @@
 !/.local/bin/mqsend
 !/.local/bin/mqstop
 !/.local/bin/zoxide-seed.sh
+# fcitx5-rime user config (schema selection). build/, *.userdb/, installation.yaml stay ignored.
+!/.local/share/
+/.local/share/*
+!/.local/share/fcitx5/
+/.local/share/fcitx5/*
+!/.local/share/fcitx5/rime/
+/.local/share/fcitx5/rime/*
+!/.local/share/fcitx5/rime/*.custom.yaml
 
 # ============================================================
 # .gemini/: cred-bearing app dir — strict whitelist, NEVER use **

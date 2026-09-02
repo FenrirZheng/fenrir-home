@@ -105,6 +105,8 @@ sudo chmod +x /usr/local/bin/fcitx5-toggle
 
 `fcitx5` itself: [`/.config/fcitx5/config`](.config/fcitx5/config) keeps `TriggerKeys=F13` as a vestigial no-op (nothing emits F13 here) — the real toggle is the keyd→RightAlt→DBus path above; the `[Hotkey]` comment in that file says so.
 
+Input methods: fcitx5's IM list is `keyboard-us`, `rime` (default), `chewing` — profile lives in the `.config/fcitx5` repo. Rime schema selection (注音: `bopomofo_tw`, `bopomofo`) is [`.local/share/fcitx5/rime/default.custom.yaml`](.local/share/fcitx5/rime/default.custom.yaml), tracked via the `.local/` whitelist in [`.gitignore`](.gitignore); rime's `build/` and `*.userdb/` next to it stay untracked. Fresh machine: `apt install fcitx5-rime rime-data-bopomofo` (see fresh-clone step 7), then add rime to the IM group with `fcitx5-configtool` or the DBus `SetInputMethodGroupInfo` call.
+
 ## Commit conventions
 
 `git log --oneline` shows a preference for **small, system-scoped commits that bundle config + service** together (e.g. `ab99e2b` adds zoxide-seed shell config and the emacs daemon systemd unit in one commit). Don't split a feature's client and service halves into separate commits unless they truly are independent.
@@ -148,7 +150,7 @@ After cloning into `$HOME` on a new machine:
 4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then in `~/.tmux/tools` both `cargo build --release` **and** the cmake build for `sift` — see the [tmux repo section](#tmux-tmux-config-repo) for the exact two commands. A C++20 compiler (g++ ≥ 10) and `cmake` are the only *required* new dependencies; `sift` needs no libraries beyond libc. `ninja` (`apt install ninja-build`) is optional — the `cmake --preset` spelling in that section wants it, and falls back to the generator-less commands documented right below it.
 5. fenrir-tools: build both CLIs, recreate symlinks — see [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools).
 6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required **only if** you wired the hook in step 2; it is also useful on its own for a manual `gitleaks git --staged` run.
-7. Keyboard remap: install `keyd`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
+7. Keyboard remap: install `keyd`, `fcitx5-rime`, `rime-data-bopomofo`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
 8. Terminal font: install **DejaVuSansM Nerd Font** (font files, not tracked anywhere — same class of manual dependency as gitleaks). `~/.config/alacritty/alacritty.toml` names the plain variant (`DejaVuSansM Nerd Font`, deliberately NOT `…Mono` — Mono shrinks icons into one cell), and without the font the tmux status bar's powerline caps and PUA icons degrade to overlapping tofu (the 2026-08-24 incident that motivated this step):
 
    ```bash
