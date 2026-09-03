@@ -1,24 +1,27 @@
-# dotfiles repo for $HOME — paired with `git config status.showUntrackedFiles no`.
+# dotfiles repo for $HOME — paired with `git config status.showUntrackedFiles normal`
+# (user decision 2026-09-02; it was `no` before that).
 #
 # Strategy:
 #   - Untracked files at $HOME root (caches, creds, IDE state, language toolchains,
-#     nested project repos, app state) are hidden by the showUntrackedFiles=no
-#     config, NOT by ignore rules. Don't re-add a $HOME-root deny list here —
-#     the deny list was unmaintainable (every new app dropped a new untracked
-#     dir we had to chase).
-#   - This file's job is now narrower: keep `git add <dir>` safe for the
-#     deny-then-whitelist regions (.config/, .local/, .gemini/, .tmux/plugins/),
+#     nested project repos, app state) stay visible as untracked under
+#     showUntrackedFiles=normal; they are NOT covered by ignore rules. Don't
+#     re-add a $HOME-root deny list here — the deny list was unmaintainable
+#     (every new app dropped a new untracked dir we had to chase).
+#   - This file's job is now narrower: keep `git add <dir>` safe for the deny
+#     region (.config/) and the deny-then-whitelist regions (.local/, .gemini/),
 #     and pattern-block build artefacts inside tracked subtrees.
-#   - To inspect what's untracked at $HOME: `git status -uall` (one-shot opt-in).
-#   - .ssh/ and other cred dirs are not in this file. They stay untracked because
-#     showUntrackedFiles=no hides them; if you ever `git add` one explicitly,
-#     that's a deliberate decision and you should split secrets out first
-#     (see CLAUDE.md → Phase 1 ssh Include directive plan).
+#   - `git status` collapses untracked directories; `git status -uall` expands the
+#     whole tree and is slow (see CLAUDE.md → Repo shape for the numbers).
+#   - .ssh/ and other cred dirs are not in this file. They stay untracked and
+#     visible; if you ever `git add` one explicitly, that's a deliberate decision
+#     and you should split secrets out first
+#     (see CLAUDE.md → Repo shape, the .ssh/ bullet).
 #
 # When adding a new tracked file:
-#   - At $HOME root: just `git add <path>`. Won't show in `git status` until added.
-#   - Under .config/, .local/, .gemini/: add a `!`-rule per level, same pattern
-#     as before (`!/.config/foo/`, `!/.config/foo/**`). Open every directory level.
+#   - At $HOME root: just `git add <path>`. It shows as `??` in `git status`
+#     until you add it.
+#   - Under .local/, .gemini/: add a `!`-rule per level, same pattern as before
+#     (`!/.local/foo/`, `!/.local/foo/**`). Open every directory level.
 
 # editor / shell backups (apply repo-wide so they don't sneak into tracked subtrees)
 *~
@@ -36,11 +39,15 @@
 **/Thumbs.db
 
 # ============================================================
-# .config/: independent per-app git repos live here
-# (see GITS.org for the full list and remotes).
-# They are NOT tracked by the parent dotfiles repo — hidden by
-# status.showUntrackedFiles=no. The deny rule below prevents
-# accidental `git add .config/` from sweeping in app state.
+# .config/: ~/.config is itself one independent git repo
+# (remote in GITS.org). Since 2026-09-03 it owns the whole
+# tracked .config tree — the six per-app clones that used to
+# sit inside it are ordinary directories of that repo now.
+# It is NOT tracked by the parent dotfiles repo; it shows up as
+# `?? .config/` under status.showUntrackedFiles=normal. The deny
+# rule below prevents an accidental `git add .config/` here from
+# sweeping in app state. Its own ignore rules live inside that
+# repo, in per-directory .gitignore files — don't mirror them here.
 # ============================================================
 /.config/*
 

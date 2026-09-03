@@ -12,14 +12,14 @@
 | =~/.claude/=              | =git@github.com:FenrirZheng/claude-for-fenrir.git= | Claude Code config + skills          | pure config, no build              |
 | =~/.tmux/=                | =git@github.com:FenrirZheng/config-tmux.git=       | tmux config + Rust toolset + plugins | =cargo build --release= in =tools/= |
 | =~/.emacs.d/=             | =git@github.com:FenrirZheng/emacs-config.git=      | Emacs config                         | pure config                        |
-| =~/.config/=              | =git@github.com:FenrirZheng/linux-user-home-.config.git= | =$HOME/.config= itself; tracks only =openfortivpn/config= | no =.gitignore=; the per-app repos below are nested clones and show as untracked here. Keep private — the tracked file holds a plaintext VPN password |
-| =~/.config/alacritty/=    | =git@github.com:FenrirZheng/fenrir-alacritty.git=  | Alacritty terminal config            | pure config                        |
-| =~/.config/autostart/=    | =git@github.com:FenrirZheng/fenrir-autostart.git=  | XDG autostart entries                | pure config                        |
-| =~/.config/environment.d/= | =git@github.com:FenrirZheng/fenrir-environment-d.git= | systemd environment.d config      | pure config                        |
-| =~/.config/fcitx5/=       | =git@github.com:FenrirZheng/fenrir-fcitx5.git=     | fcitx5 input method config           | pure config                        |
-| =~/.config/keyd/=         | =git@github.com:FenrirZheng/fenrir-keyd.git=       | keyd keyboard remap config           | deploy: =sudo cp default.conf /etc/keyd/= |
-| =~/.config/systemd/=      | =git@github.com:FenrirZheng/fenrir-systemd.git=    | user systemd units                   | =systemctl --user= managed         |
+| =~/.config/=              | =git@github.com:FenrirZheng/linux-user-home-.config.git= | =$HOME/.config= itself; owns the whole tracked =.config= tree — =openfortivpn/=, =alacritty/=, =autostart/=, =environment.d/=, =fcitx5/=, =keyd/=, =systemd/user/= (18 files) | Keep private — tracked =openfortivpn/config= holds a plaintext VPN password. No root =.gitignore=, so untracked siblings stay visible. keyd deploy: =sudo cp keyd/default.conf /etc/keyd/default.conf && sudo systemctl restart keyd=. Units under =systemd/user/= are =systemctl --user= managed |
 | =~/code/nicro-skill/=     | =git@github.com:FenrirZheng/nicro-skills.git=      | =nicro= Claude Code plugin (17 skills) | =claude plugin marketplace add ~/code/nicro-skill= then enable; =~/.claude/settings.json= references this path |
+
+The six per-app repos that used to sit inside =~/.config/= (=alacritty=,
+=autostart=, =environment.d=, =fcitx5=, =keyd=, =systemd=) were absorbed into the
+=~/.config/= repo on 2026-09-03: they are ordinary tracked directories now, not
+clones, and have no rows of their own. Their old histories are archived as
+=git bundle= files in =~/config-repo-archive/=.
 
 * CLI tool repos
 
