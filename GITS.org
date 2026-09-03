@@ -12,6 +12,7 @@
 | =~/.claude/=              | =git@github.com:FenrirZheng/claude-for-fenrir.git= | Claude Code config + skills          | pure config, no build              |
 | =~/.tmux/=                | =git@github.com:FenrirZheng/config-tmux.git=       | tmux config + Rust toolset + plugins | =cargo build --release= in =tools/= |
 | =~/.emacs.d/=             | =git@github.com:FenrirZheng/emacs-config.git=      | Emacs config                         | pure config                        |
+| =~/.config/=              | =git@github.com:FenrirZheng/linux-user-home-.config.git= | =$HOME/.config= itself; tracks only =openfortivpn/config= | no =.gitignore=; the per-app repos below are nested clones and show as untracked here. Keep private — the tracked file holds a plaintext VPN password |
 | =~/.config/alacritty/=    | =git@github.com:FenrirZheng/fenrir-alacritty.git=  | Alacritty terminal config            | pure config                        |
 | =~/.config/autostart/=    | =git@github.com:FenrirZheng/fenrir-autostart.git=  | XDG autostart entries                | pure config                        |
 | =~/.config/environment.d/= | =git@github.com:FenrirZheng/fenrir-environment-d.git= | systemd environment.d config      | pure config                        |
