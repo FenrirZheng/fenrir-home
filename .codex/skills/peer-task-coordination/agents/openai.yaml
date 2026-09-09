@@ -1,0 +1,4 @@
+interface:
+  display_name: "Peer Task Coordination"
+  short_description: "Coordinate peers with receipt evidence and durable events"
+  default_prompt: "Use $peer-task-coordination to coordinate this authorized task with the named peer and verify receipt, state, and versioned results."
