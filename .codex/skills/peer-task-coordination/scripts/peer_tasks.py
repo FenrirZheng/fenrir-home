@@ -17,7 +17,7 @@ import time
 import uuid
 
 STATES = {'idle', 'running', 'waiting_approval', 'blocked', 'done', 'unknown'}
-FIELDS = ('socket', 'server_pid', 'server_started', 'session', 'pane', 'pane_pid', 'command', 'worktree')
+FIELDS = ('socket', 'server_pid', 'server_started', 'session', 'pane', 'pane_pid', 'command', 'pane_cwd')
 
 
 def stamp():
@@ -48,18 +48,22 @@ def observe(identity):
     need(len(values) == len(fields) and all(values), 'incomplete tmux identity')
     result = dict(zip(FIELDS, values))
     need(result['pane'] == identity['pane'], 'tmux resolved another pane')
-    result['worktree'] = str(Path(result['worktree']).resolve())
+    result['pane_cwd'] = str(Path(result['pane_cwd']).resolve())
     return result
 
 
 class Mailbox:
-    def __init__(self, path):
+    def __init__(self, path, *, create=False, readonly=False):
         path = Path(path).expanduser().resolve()
         self.path = str(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path, timeout=10, isolation_level=None)
+        need(not (create and readonly), 'cannot initialize a read-only store')
+        if create:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        mode = 'ro' if readonly else ('rwc' if create else 'rw')
+        self.db = sqlite3.connect(path.as_uri() + '?mode=' + mode, uri=True, timeout=10, isolation_level=None)
         self.db.row_factory = sqlite3.Row
-        self.db.executescript('''
+        if create:
+            self.db.executescript('''
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS workers
           (worker TEXT PRIMARY KEY, generation TEXT NOT NULL, identity TEXT NOT NULL,
@@ -73,12 +77,12 @@ class Mailbox:
           (seq INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT NOT NULL,
            generation TEXT NOT NULL, body TEXT NOT NULL);
         ''')
-        self.db.execute('INSERT OR IGNORE INTO meta VALUES (?,?)', ('epoch', uuid.uuid4().hex))
+            self.db.execute('INSERT OR IGNORE INTO meta VALUES (?,?)', ('epoch', uuid.uuid4().hex))
         self.epoch = self.db.execute('SELECT value FROM meta WHERE key=?', ('epoch',)).fetchone()[0]
 
     @contextmanager
-    def transaction(self):
-        self.db.execute('BEGIN IMMEDIATE')
+    def transaction(self, *, write=True):
+        self.db.execute('BEGIN IMMEDIATE' if write else 'BEGIN')
         try:
             yield
             self.db.execute('COMMIT')
@@ -101,9 +105,13 @@ class Mailbox:
         w = self.worker(r['worker'])
         need(r['generation'] == w['generation'], 'generation changed; handshake again')
         identity = json.loads(w['identity'])
+        # v1 identities used worktree for both concepts. Normalize in memory only.
+        identity.setdefault('pane_cwd', identity.get('worktree'))
+        identity.setdefault('task_worktree', identity.get('worktree'))
         need(not identity.get('reconciled'), 'task reconciled; fresh receiver enrollment required')
         actual = observe(identity)
         need(all(actual[k] == identity[k] for k in FIELDS), 'tmux identity changed')
+        need(Path(identity['task_worktree']).is_dir(), 'task_worktree is no longer a directory')
         if receiver:
             need(r.get('actor_session') == identity['agent_session_id'], 'receiver session mismatch')
         return w
@@ -122,7 +130,14 @@ class Mailbox:
             need(isinstance(identity.get(k), str) and identity[k].strip(), k + ' is required')
         need(r.get('actor_session') == identity['agent_session_id'], 'receiver must self-enroll')
         actual = observe(identity)
-        need(str(Path(identity['worktree']).resolve()) == actual['worktree'], 'worktree mismatch')
+        worktree = identity.get('task_worktree', identity.get('worktree'))
+        need(isinstance(worktree, str) and os.path.isabs(worktree), 'task_worktree must be absolute')
+        need(Path(worktree).is_dir(), 'task_worktree must be an existing directory')
+        if 'task_worktree' in identity and 'worktree' in identity:
+            need(Path(identity['worktree']).resolve() == Path(worktree).resolve(), 'conflicting worktree aliases')
+        if 'pane_cwd' in identity:
+            need(str(Path(identity['pane_cwd']).resolve()) == actual['pane_cwd'], 'pane_cwd mismatch')
+        identity['task_worktree'] = identity['worktree'] = str(Path(worktree).resolve())
         identity.update(actual)
         with self.transaction():
             need(not self.db.execute('SELECT 1 FROM messages WHERE worker=? AND terminal=0',
@@ -150,7 +165,7 @@ class Mailbox:
             old = self.db.execute('SELECT * FROM messages WHERE message_id=?', (r['message_id'],)).fetchone()
             if old:
                 need(old['payload'] == pack(payload), 'message_id reused with different payload')
-                return dict(delivery='acknowledged' if old['ack'] else 'queued', duplicate=True, message_id=r['message_id'])
+                return dict(delivery=self.delivery(old), duplicate=True, message_id=r['message_id'])
             need(not self.db.execute('SELECT 1 FROM messages WHERE worker=? AND terminal=0',
                                      (w['worker'],)).fetchone(), 'worker already has unresolved work')
             for row in self.db.execute('SELECT payload FROM messages WHERE terminal=0'):
@@ -166,6 +181,70 @@ class Mailbox:
             self.event(w, 'queued', dict(task_id=r['task_id'], message_id=r['message_id'], payload=payload))
         return dict(delivery='queued', duplicate=False, message_id=r['message_id'])
 
+    def rejection(self, m):
+        for row in self.db.execute('SELECT body FROM events WHERE worker=? AND generation=? ORDER BY seq DESC',
+                                   (m['worker'], m['generation'])):
+            event = json.loads(row['body'])
+            if event['type'] == 'rejected' and event.get('message_id') == m['message_id']:
+                return event['receipt']
+
+    def delivery(self, m):
+        if m['ack']:
+            return 'acknowledged'
+        if self.rejection(m):
+            return 'rejected'
+        return 'cancelled' if m['terminal'] else 'queued'
+
+    def update_parent(self, m, w):
+        payload = json.loads(m['payload'])
+        if payload.get('kind') != 'update':
+            return None
+        parent = self.message(dict(message_id=payload['update_of'], task_id=m['task_id']), w)
+        need(parent['ack'] and not parent['terminal'] and w['message_id'] == parent['message_id'],
+             'update requires accepted active original task')
+        return parent
+
+    def send_update(self, r):
+        for k in ('task_id', 'message_id', 'update_of', 'message'):
+            need(isinstance(r.get(k), str) and r[k].strip(), k + ' is required')
+        need(not any(k in r for k in ('owned_paths', 'base_revision', 'acceptance', 'worktree', 'task_worktree')),
+             'updates cannot change task scope, baseline or ownership')
+        payload = {k: r[k] for k in ('task_id', 'message_id', 'update_of', 'message')}
+        payload.update(kind='update', owned_paths=[])
+        with self.transaction():
+            w = self.verified(r)
+            payload.update(worker=w['worker'], generation=w['generation'])
+            old = self.db.execute('SELECT * FROM messages WHERE message_id=?', (r['message_id'],)).fetchone()
+            if old:
+                need(old['payload'] == pack(payload), 'message_id reused with different payload')
+                return dict(delivery=self.delivery(old), duplicate=True, message_id=r['message_id'])
+            self.update_parent(dict(payload=pack(payload), task_id=r['task_id']), w)
+            self.db.execute('INSERT INTO messages(message_id,worker,generation,task_id,payload) VALUES (?,?,?,?,?)',
+                            (r['message_id'], w['worker'], w['generation'], r['task_id'], pack(payload)))
+            self.event(w, 'update_queued', dict(task_id=r['task_id'], message_id=r['message_id'], payload=payload))
+        return dict(delivery='queued', duplicate=False, message_id=r['message_id'])
+
+    def reject(self, r):
+        need(isinstance(r.get('reason'), str) and r['reason'].strip(), 'rejection reason required')
+        with self.transaction():
+            w = self.verified(r, receiver=True)
+            m = self.message(r, w)
+            old = self.rejection(m)
+            if old:
+                need(old['reason'] == r['reason'], 'rejection conflicts with existing receipt')
+                return dict(delivery='rejected', duplicate=True, receipt=old)
+            need(not m['ack'], 'accepted work requires cancellation/reconciliation, not rejection')
+            need(not m['terminal'], 'message already terminal')
+            parent = self.update_parent(m, w)
+            receipt = {k: r[k] for k in ('worker', 'generation', 'task_id', 'message_id', 'actor_session', 'reason')}
+            receipt.update(accepted=False, updated_at=stamp())
+            self.db.execute('UPDATE messages SET terminal=1 WHERE message_id=?', (m['message_id'],))
+            if parent is None:
+                self.db.execute('UPDATE workers SET state=?,evidence=?,updated=? WHERE worker=?',
+                                ('idle', 'receiver rejected task: ' + r['reason'], time.time(), w['worker']))
+            self.event(w, 'rejected', dict(receipt=receipt, task_id=m['task_id'], message_id=m['message_id']))
+        return dict(delivery='rejected', duplicate=False, receipt=receipt)
+
     def acknowledge(self, r):
         need(r.get('evidence'), 'explicit receiver acceptance evidence required')
         need(r.get('accepted') is True, 'only explicit accepted=true creates an ACK')
@@ -174,11 +253,16 @@ class Mailbox:
             m = self.message(r, w)
             if m['ack']:
                 return dict(delivery='acknowledged', duplicate=True, receipt=json.loads(m['ack']))
+            need(not m['terminal'], 'message already terminal')
+            parent = self.update_parent(m, w)
             receipt = {k: r[k] for k in ('worker', 'generation', 'task_id', 'message_id', 'actor_session', 'evidence', 'accepted')}
             receipt['updated_at'] = stamp()
             self.db.execute('UPDATE messages SET ack=? WHERE message_id=?', (pack(receipt), r['message_id']))
-            self.db.execute('UPDATE workers SET evidence=?,updated=? WHERE worker=?',
-                            ('accepted; execution not yet reported: ' + r['evidence'], time.time(), w['worker']))
+            if parent is not None:
+                self.db.execute('UPDATE messages SET terminal=1 WHERE message_id=?', (m['message_id'],))
+            else:
+                self.db.execute('UPDATE workers SET evidence=?,updated=? WHERE worker=?',
+                                ('accepted; execution not yet reported: ' + r['evidence'], time.time(), w['worker']))
             self.event(w, 'acknowledged', dict(receipt=receipt, task_id=m['task_id'], message_id=m['message_id']))
         return dict(delivery='acknowledged', duplicate=False, receipt=receipt)
 
@@ -188,7 +272,7 @@ class Mailbox:
             w = self.verified(r, receiver=True)
             m = self.message(r, w)
             need(m['ack'], 'acknowledge before reporting work')
-            need(w['message_id'] == m['message_id'], 'cannot overwrite newer task state')
+            need(json.loads(m['payload']).get('kind') != 'update', 'report execution against original task message')
             need(not m['terminal'] or r['state'] == 'done', 'terminal task cannot resume')
             need(r['state'] != 'idle', 'unfinished task cannot be released as idle')
             body = dict(task_id=m['task_id'], message_id=m['message_id'], state=r['state'], evidence=r['evidence'])
@@ -205,20 +289,40 @@ class Mailbox:
                     need(all(t.get(k) for k in ('command', 'result', 'tested_revision', 'updated_at')), 'incomplete test evidence')
                 for a in h['artifacts']:
                     need(os.path.isabs(a.get('path', '')) and a.get('sha256'), 'artifact path/digest required')
+                body['handoff'] = h
+                maximum_revision = 0
                 for row in self.db.execute('SELECT body FROM events WHERE worker=? AND generation=? ORDER BY seq DESC',
                                            (w['worker'], w['generation'])):
                     old = json.loads(row['body'])
                     if old.get('message_id') == m['message_id'] and old.get('handoff'):
-                        need(h['revision'] > old['handoff']['revision'], 'handoff revision must increase')
-                        break
-                body['handoff'] = h
+                        if h['revision'] == old['handoff']['revision']:
+                            receipt = {k: old[k] for k in body}
+                            need(pack(receipt) == pack(body), 'handoff revision content conflict')
+                            return receipt
+                        maximum_revision = max(maximum_revision, old['handoff']['revision'])
+                need(h['revision'] > maximum_revision, 'handoff revision must increase')
+                need(not self.pending_updates(w, m), 'resolve pending updates before done')
                 self.db.execute('UPDATE messages SET terminal=1 WHERE message_id=?', (m['message_id'],))
+            need(w['message_id'] == m['message_id'], 'cannot overwrite newer task state')
             self.db.execute('UPDATE workers SET state=?,evidence=?,updated=? WHERE worker=?',
                             (r['state'], r['evidence'], time.time(), w['worker']))
             self.event(w, 'status', body)
         return body
 
+    def pending_updates(self, w, m):
+        return [row['message_id'] for row in self.db.execute(
+            'SELECT message_id,payload FROM messages WHERE worker=? AND generation=? AND task_id=? AND terminal=0',
+            (w['worker'], w['generation'], m['task_id']))
+            if json.loads(row['payload']).get('update_of') == m['message_id']]
+
     def get_status(self, r):
+        # notify's retry check already owns a transaction.
+        if self.db.in_transaction:
+            return self._get_status(r)
+        with self.transaction(write=False):
+            return self._get_status(r)
+
+    def _get_status(self, r):
         w = self.worker(r['worker'])
         state, evidence = w['state'], w['evidence']
         source = 'receiver_ledger' if state != 'unknown' else 'task_ledger'
@@ -235,12 +339,13 @@ class Mailbox:
             if age < 0 or age > ttl:
                 state, evidence = 'unknown', 'status expired or clock moved backwards'
                 source, observed_at = 'freshness_check', stamp()
-        m = self.db.execute('SELECT ack,attempts FROM messages WHERE message_id=?', (w['message_id'],)).fetchone()
+        m = self.db.execute('SELECT * FROM messages WHERE message_id=?', (w['message_id'],)).fetchone()
         return dict(worker=w['worker'], generation=w['generation'], state=state,
                     evidence=[dict(source=source, value=evidence, observed_at=observed_at)],
                     reported_state=w['state'], last_update=datetime.fromtimestamp(w['updated'], timezone.utc).isoformat(),
                     task_id=w['task_id'], message_id=w['message_id'],
-                    delivery=('acknowledged' if m['ack'] else 'queued') if m else None,
+                    delivery=self.delivery(m) if m else None,
+                    pending_updates=self.pending_updates(w, m) if m else [],
                     notification_attempts=m['attempts'] if m else 0)
 
     def reconcile(self, r):
@@ -253,18 +358,21 @@ class Mailbox:
             m = self.message(r, w)
             need(not m['terminal'], 'task already resolved')
             need(w['message_id'] == m['message_id'], 'cannot reconcile a newer task')
-            self.db.execute('UPDATE messages SET terminal=1 WHERE message_id=?', (m['message_id'],))
+            cancelled_updates = self.pending_updates(w, m)
+            self.db.execute('UPDATE messages SET terminal=1 WHERE worker=? AND generation=? AND task_id=?',
+                            (w['worker'], w['generation'], m['task_id']))
             self.db.execute('UPDATE workers SET state=?,evidence=?,updated=? WHERE worker=?',
                             ('unknown', 'coordinator reconciled task; new receiver handshake required', time.time(), w['worker']))
             # Invalidate dispatch until fresh receiver enrollment, while keeping old events readable.
             identity = json.loads(w['identity'])
             identity['reconciled'] = True
             self.db.execute('UPDATE workers SET identity=? WHERE worker=?', (pack(identity), w['worker']))
-            self.event(w, 'reconciled', {k: r[k] for k in ('task_id', 'message_id', 'workers_stopped_evidence', 'artifact_review_evidence')})
+            self.event(w, 'reconciled', dict(cancelled_updates=cancelled_updates,
+                       **{k: r[k] for k in ('task_id', 'message_id', 'workers_stopped_evidence', 'artifact_review_evidence')}))
         return dict(resolved=True, state='unknown', requires_handshake=True)
 
     def read_updates(self, r):
-        with self.transaction():
+        with self.transaction(write=False):
             w = self.worker(r['worker'])
             prefix = self.epoch + ':' + w['generation'] + ':'
             cursor = r.get('cursor')
@@ -313,11 +421,18 @@ class Mailbox:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.verified(r)
             # ACK may arrive while acquiring the transport lock.
-            if self.message(r, w)['ack']:
+            current = self.message(r, w)
+            if current['ack']:
                 return dict(delivery='acknowledged', notified=False)
+            need(not current['terminal'], 'message resolved while waiting for transport lock')
+            self.update_parent(current, w)
             buffer = 'peer-' + uuid.uuid4().hex
-            payload = ('[peer-task/v1] Read this task from the shared mailbox. Only acknowledge it yourself '
-                       'after accepting its scope, then report running before work.\n' + pack(dict(
+            instruction = ('Read this update from the shared mailbox and acknowledge or reject this message yourself. '
+                           'Keep execution reports on the original task; update ACK does not mean applied. '
+                           if json.loads(m['payload']).get('kind') == 'update' else
+                           'Read this task from the shared mailbox. Only acknowledge it yourself '
+                           'after accepting its scope, then report running before work. ')
+            payload = ('[peer-task/v1] ' + instruction + '\n' + pack(dict(
                            protocol='peer-task/v1', store=self.path, helper=str(Path(__file__).resolve()),
                            **json.loads(m['payload']))))
             try:
@@ -335,9 +450,10 @@ class Mailbox:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--version', action='version', version='peer-task/v1 helper 1.0')
+    p.add_argument('--version', action='version', version='peer-task/v1 helper 1.1')
     p.add_argument('--store', required=True, help='shared task-owned SQLite path')
-    p.add_argument('operation', choices=['enroll', 'send_task', 'acknowledge', 'report', 'get_status', 'read_updates', 'notify', 'reconcile'])
+    p.add_argument('operation', choices=['init', 'enroll', 'send_task', 'send_update', 'acknowledge', 'reject',
+                                       'report', 'get_status', 'read_updates', 'notify', 'reconcile'])
     p.add_argument('--request', required=True, help='JSON request file, or - for stdin')
     args = p.parse_args()
     try:
@@ -345,11 +461,12 @@ def main():
         need(isinstance(r, dict), 'request must be a JSON object')
         old_umask = os.umask(0o077)
         try:
-            mailbox = Mailbox(args.store)
+            mailbox = Mailbox(args.store, create=args.operation in ('init', 'enroll'),
+                              readonly=args.operation in ('get_status', 'read_updates'))
         finally:
             os.umask(old_umask)
         try:
-            result = getattr(mailbox, args.operation)(r)
+            result = dict(store=mailbox.path, epoch=mailbox.epoch) if args.operation == 'init' else getattr(mailbox, args.operation)(r)
         finally:
             mailbox.db.close()
         print(pack(result))

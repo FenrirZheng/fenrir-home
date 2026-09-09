@@ -3,9 +3,12 @@
 import copy
 import concurrent.futures
 import json
+import sqlite3
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -19,9 +22,9 @@ class MailboxTests(unittest.TestCase):
         self.obs = patch.object(pt, 'observe', side_effect=lambda i: {
             'socket': '/tmp/test-socket', 'server_pid': '10', 'server_started': '20',
             'session': '$0', 'pane': i['pane'], 'pane_pid': '30', 'command': 'codex',
-            'worktree': self.temp.name})
+            'pane_cwd': self.temp.name})
         self.obs.start()
-        self.box = pt.Mailbox(self.path)
+        self.box = pt.Mailbox(self.path, create=True)
         self.enroll = dict(worker='a', actor_session='runtime-a', identity=dict(
             socket='/tmp/test-socket', pane='%1', worktree=self.temp.name,
             agent_session_id='runtime-a', model='observed-model', identity_evidence='receiver handshake'))
@@ -131,7 +134,7 @@ class MailboxTests(unittest.TestCase):
 
     def test_store_recreation_has_new_epoch(self):
         old_epoch = self.box.epoch
-        other = pt.Mailbox(Path(self.temp.name) / 'other.sqlite')
+        other = pt.Mailbox(Path(self.temp.name) / 'other.sqlite', create=True)
         try:
             self.assertNotEqual(old_epoch, other.epoch)
         finally:
@@ -160,18 +163,240 @@ class MailboxTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.box.report(bad)
         good = self.done_request()
-        self.box.report(good)
-        with self.assertRaises(ValueError):
-            self.box.report(good)
+        receipt = self.box.report(good)
+        self.assertEqual(self.box.report(good), receipt)
         newer = copy.deepcopy(good)
         newer['handoff']['revision'] = 2
         self.box.report(newer)
         self.box.send_task(dict(self.req, message_id='m-next', task_id='task-next'))
+        before = self.box.get_status(self.actor)
+        self.assertEqual(self.box.report(good), receipt)
+        self.assertEqual(self.box.get_status(self.actor), before)
         newer['handoff']['revision'] = 3
         with self.assertRaisesRegex(ValueError, 'newer task'):
             self.box.report(newer)
         history = [e['handoff']['revision'] for e in self.box.read_updates(self.actor)['new_events'] if 'handoff' in e]
         self.assertEqual(history, [1, 2])
+
+    def update_request(self, message_id='u-1'):
+        return dict(worker='a', generation=self.actor['generation'], task_id='task-a',
+                    message_id=message_id, update_of='m-a', message='Use the confirmed interface wording.')
+
+    def test_worktree_is_independent_from_pane_cwd(self):
+        task = Path(self.temp.name) / 'separate-worktree'
+        task.mkdir()
+        request = copy.deepcopy(self.enroll)
+        request['identity'].pop('worktree')
+        request['identity']['task_worktree'] = str(task)
+        binding = self.box.enroll(request)
+        self.assertEqual(binding['identity']['task_worktree'], str(task))
+        self.assertEqual(binding['identity']['pane_cwd'], self.temp.name)
+        self.assertEqual(self.box.get_status(dict(worker='a'))['state'], 'idle')
+        changed = dict(binding['identity'], pane_cwd=str(task))
+        with patch.object(pt, 'observe', return_value=changed):
+            self.assertEqual(self.box.get_status(dict(worker='a'))['state'], 'unknown')
+        for bad in ('relative', str(task / 'missing')):
+            request['identity']['task_worktree'] = bad
+            with self.assertRaises(ValueError):
+                self.box.enroll(request)
+
+    def test_legacy_identity_read_does_not_migrate_or_change_epoch(self):
+        legacy = dict(self.binding['identity'])
+        legacy.pop('pane_cwd')
+        legacy.pop('task_worktree')
+        self.box.db.execute('UPDATE workers SET identity=?', (pt.pack(legacy),))
+        snapshot = self.path.read_bytes()
+        reader = pt.Mailbox(self.path, readonly=True)
+        try:
+            self.assertEqual(reader.get_status(self.actor)['state'], 'idle')
+            self.assertEqual(reader.epoch, self.box.epoch)
+            reader.read_updates(self.actor)
+            with self.assertRaises(sqlite3.OperationalError):
+                reader.db.execute("UPDATE workers SET state='unknown'")
+        finally:
+            reader.db.close()
+        self.assertEqual(self.path.read_bytes(), snapshot)
+
+    def test_reads_and_mutations_on_missing_store_do_not_create_paths(self):
+        missing = Path(self.temp.name) / 'typo' / 'mailbox.sqlite'
+        for operation in ('get_status', 'read_updates', 'send_task'):
+            result = subprocess.run([sys.executable, '-B', str(Path(pt.__file__)), '--store', str(missing),
+                                     operation, '--request', '-'], input=pt.pack(self.req),
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertFalse(missing.parent.exists())
+
+    def test_reads_do_not_wait_for_a_reserved_writer_lock(self):
+        reader = pt.Mailbox(self.path, readonly=True)
+        reader.db.execute('PRAGMA busy_timeout=1')
+        try:
+            with self.box.transaction():
+                self.assertEqual(reader.get_status(self.actor)['state'], 'idle')
+                self.assertEqual(len(reader.read_updates(self.actor)['new_events']), 1)
+        finally:
+            reader.db.close()
+
+    def test_updates_preserve_ownership_state_and_freshness_and_block_done(self):
+        self.accepted()
+        self.box.report(dict(self.actor, state='waiting_approval'))
+        before = self.box.get_status(self.actor)
+        u = self.update_request()
+        self.box.send_update(u)
+        status = self.box.get_status(self.actor)
+        self.assertEqual(status['pending_updates'], ['u-1'])
+        for k in ('state', 'last_update', 'message_id', 'task_id', 'evidence'):
+            self.assertEqual(status[k], before[k])
+        with self.assertRaisesRegex(ValueError, 'pending updates'):
+            self.box.report(self.done_request())
+        with self.assertRaisesRegex(ValueError, 'unresolved work'):
+            self.box.send_task(dict(self.req, message_id='m-other'))
+        ack = dict(self.actor, message_id='u-1')
+        self.box.acknowledge(ack)
+        self.assertEqual(self.box.get_status(self.actor), before)
+        with self.assertRaisesRegex(ValueError, 'original task'):
+            self.box.report(dict(ack, state='running'))
+        self.box.report(self.done_request())
+        self.assertEqual(self.box.send_update(u)['delivery'], 'acknowledged')
+        self.assertTrue(self.box.acknowledge(ack)['duplicate'])
+        with self.assertRaisesRegex(ValueError, 'active original'):
+            self.box.send_update(self.update_request('u-late'))
+
+    def test_update_identity_payload_and_original_message_are_guarded(self):
+        with self.assertRaises(ValueError):
+            self.box.send_update(self.update_request())
+        self.box.send_task(self.req)
+        with self.assertRaisesRegex(ValueError, 'accepted active'):
+            self.box.send_update(self.update_request())
+        self.box.acknowledge(self.actor)
+        u = self.update_request()
+        for changes in ({'generation': 'old'}, {'task_id': 'wrong'}, {'update_of': 'missing'},
+                        {'owned_paths': []}, {'base_revision': 'different'}):
+            with self.assertRaises(ValueError):
+                self.box.send_update(dict(u, **changes))
+        self.box.send_update(u)
+        with self.assertRaisesRegex(ValueError, 'different payload'):
+            self.box.send_update(dict(u, message='changed'))
+        with self.assertRaisesRegex(ValueError, 'receiver session'):
+            self.box.acknowledge(dict(self.actor, message_id='u-1', actor_session='sender'))
+        with self.assertRaisesRegex(ValueError, 'active original'):
+            self.box.send_update(dict(self.update_request('u-2'), update_of='u-1'))
+
+    def test_rejection_is_durable_and_frees_only_rejected_task_claims(self):
+        self.box.send_task(self.req)
+        reject = dict(self.actor, reason='Cannot accept the requested baseline')
+        receipt = self.box.reject(reject)
+        self.assertEqual(receipt['delivery'], 'rejected')
+        self.assertEqual(self.box.get_status(self.actor)['delivery'], 'rejected')
+        self.assertEqual(self.box.send_task(self.req)['delivery'], 'rejected')
+        self.assertEqual(self.box.reject(reject)['receipt'], receipt['receipt'])
+        with self.assertRaises(ValueError):
+            self.box.reject(dict(reject, reason='different'))
+        with self.assertRaisesRegex(ValueError, 'terminal'):
+            self.box.acknowledge(self.actor)
+        next_request = dict(self.req, task_id='next', message_id='next')
+        self.assertEqual(self.box.send_task(next_request)['delivery'], 'queued')
+
+    def test_update_reject_preserves_task_and_reconcile_closes_pending_updates(self):
+        self.accepted()
+        self.box.report(dict(self.actor, state='running'))
+        before = self.box.get_status(self.actor)
+        self.box.send_update(self.update_request())
+        self.box.reject(dict(self.actor, message_id='u-1', reason='Outside agreed scope'))
+        self.assertEqual(self.box.get_status(self.actor), before)
+        with self.assertRaisesRegex(ValueError, 'accepted work'):
+            self.box.reject(dict(self.actor, reason='stop'))
+        self.box.send_update(self.update_request('u-2'))
+        self.box.reconcile(dict(self.actor, workers_stopped_evidence='all writers stopped',
+                                artifact_review_evidence='partial effects inspected'))
+        self.assertEqual(self.box.get_status(self.actor)['pending_updates'], [])
+        events = self.box.read_updates(self.actor)['new_events']
+        self.assertEqual(events[-1]['cancelled_updates'], ['u-2'])
+        self.box.enroll(self.enroll)
+
+    def test_handoff_retries_preserve_receipt_and_reject_changed_evidence(self):
+        self.accepted()
+        request = self.done_request()
+        first = self.box.report(request)
+        before = self.box.read_updates(self.actor)
+        status = self.box.get_status(self.actor)
+        self.assertEqual(self.box.report(request), first)
+        self.assertEqual(self.box.read_updates(self.actor), before)
+        self.assertEqual(self.box.get_status(self.actor), status)
+        for change in ('evidence', 'time', 'result'):
+            different = copy.deepcopy(request)
+            if change == 'evidence':
+                different['evidence'] = 'different'
+            elif change == 'time':
+                different['handoff']['tests'][0]['updated_at'] = 'different'
+            else:
+                different['handoff']['tests'][0]['result'] = 'fail'
+            with self.assertRaisesRegex(ValueError, 'content conflict'):
+                self.box.report(different)
+
+    def test_update_notification_has_independent_attempts(self):
+        self.accepted()
+        self.box.send_update(self.update_request())
+        r = dict(self.actor, message_id='u-1', ui_ready_evidence='inspected empty main input')
+        calls = []
+        with patch.object(pt, 'tmux', side_effect=lambda *a, **kw: calls.append((a, kw)) or ''), patch.object(pt.time, 'sleep'):
+            self.box.notify(r)
+        pasted = next(kw['data'] for a, kw in calls if a[1] == 'load-buffer')
+        self.assertIn('Read this update', pasted)
+        self.assertIn('"update_of":"m-a"', pasted)
+        self.assertEqual(self.box.get_status(self.actor)['notification_attempts'], 0)
+        self.assertEqual(self.box.message(r, self.box.worker('a'))['attempts'], 1)
+
+    def test_update_and_completion_race_cannot_both_succeed(self):
+        self.accepted()
+        barrier = threading.Barrier(2)
+        done = self.done_request()
+
+        def run(operation, request):
+            box = pt.Mailbox(self.path)
+            try:
+                barrier.wait(timeout=5)
+                try:
+                    return operation, True, getattr(box, operation)(request)
+                except ValueError as e:
+                    return operation, False, str(e)
+            finally:
+                box.db.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(run, 'send_update', self.update_request()),
+                       pool.submit(run, 'report', done)]
+            results = [f.result() for f in futures]
+        self.assertEqual(sum(success for _, success, _ in results), 1, results)
+        status = self.box.get_status(self.actor)
+        if status['reported_state'] == 'done':
+            self.assertEqual(status['pending_updates'], [])
+            self.assertIn('active original', results[0][2])
+        else:
+            self.assertEqual(status['pending_updates'], ['u-1'])
+            self.assertIn('pending updates', results[1][2])
+
+    def test_rejection_during_notification_prevents_paste(self):
+        self.box.send_task(self.req)
+        calls = []
+        def reject_while_locking(*args):
+            self.box.reject(dict(self.actor, reason='Declined before submission'))
+        with patch.object(pt.fcntl, 'flock', side_effect=reject_while_locking), \
+                patch.object(pt, 'tmux', side_effect=lambda *a, **kw: calls.append(a) or ''):
+            with self.assertRaisesRegex(ValueError, 'resolved while waiting'):
+                self.box.notify(dict(self.actor, ui_ready_evidence='empty main input'))
+        self.assertEqual(calls, [])
+
+    def test_rejected_update_does_not_release_claims_to_other_worker(self):
+        self.accepted()
+        self.box.send_update(self.update_request())
+        self.box.reject(dict(self.actor, message_id='u-1', reason='Not applicable'))
+        other = copy.deepcopy(self.enroll)
+        other.update(worker='b', actor_session='runtime-b')
+        other['identity'].update(agent_session_id='runtime-b', pane='%2')
+        generation = self.box.enroll(other)['generation']
+        with self.assertRaisesRegex(ValueError, 'ownership conflict'):
+            self.box.send_task(dict(self.req, worker='b', generation=generation,
+                                    task_id='b-task', message_id='b-message'))
 
     def test_failed_submit_requires_inspection_and_bounded_retry(self):
         self.box.send_task(self.req)

@@ -9,6 +9,10 @@ python3 -B /home/fenrir/.codex/skills/peer-task-coordination/scripts/peer_tasks.
 
 Use the installed skill's actual absolute path if different. Choose one shared, task-owned store inside both peers' allowed write roots. Preserve it through the handoff. Different stores do not share ownership or deduplication. Back up SQLite using its backup API or while every writer is stopped; do not truncate tables or restore an old database while peers are active. The helper never prunes events; restoring a snapshot into an active epoch is unsupported. Event histories may contain sensitive task text, so use an appropriately private parent directory.
 
+Helper 1.1 opens `get_status` and `read_updates` with SQLite `mode=ro` and read transactions. A missing/mistyped store fails without creating directories, schema or an epoch. Initialize deliberately with `init --request` pointing to `{}`; `enroll` also supports first-use initialization. Other mutations require an existing store. Python callers use `Mailbox(path, create=True)` only for bootstrap, `Mailbox(path, readonly=True)` for queries, and `Mailbox(path)` for existing writable stores.
+
+Existing 1.0 SQLite stores require no schema migration. Legacy identity `worktree` is interpreted in memory as both the original pane directory and task directory; renewed enrollment records both fields. The task payload's `worktree` remains a compatibility alias for `task_worktree`. Keep all writers on 1.1 once using updates or rejections: older writers do not enforce the new invariants. A frozen old helper/store may finish an already-running old-protocol coordination separately.
+
 ## 1. Receiver self-enrollment
 
 First obtain an explicit receiver handshake by the existing authorized native/file/terminal channel. Inspect the intended UI before terminal submission. The receiver, not the sender, runs `enroll` with:
@@ -20,7 +24,7 @@ First obtain an explicit receiver handshake by the existing authorized native/fi
   "identity": {
     "socket": "/tmp/tmux-1000/default",
     "pane": "%40",
-    "worktree": "/absolute/worktree",
+    "task_worktree": "/absolute/worktree",
     "agent_session_id": "ACTUAL_RUNTIME_SESSION_ID",
     "model": "ACTUAL_OBSERVED_MODEL",
     "identity_evidence": "Receiver reports session/model from current runtime context; coordinator inspected main conversation"
@@ -35,7 +39,7 @@ tmux -S /tmp/tmux-1000/default list-panes -a -F '#{pane_id} #{session_id} #{pane
 tmux -S /tmp/tmux-1000/default capture-pane -p -J -t %40 -S -20
 ```
 
-`enroll` reads tmux server PID/start time, session ID, pane ID/PID, command and path. The receiver's worktree must match. It returns a new random `generation` even if the observed tuple is unchanged. Record that exact value. Self-reported runtime ID and model are cooperative assertions, not proof of process authorship; any same-user process able to write the store can forge them. Agent runtime changes that preserve tmux metadata require a renewed handshake.
+`enroll` reads tmux server PID/start time, session ID, pane ID/PID, command and `pane_cwd`. The receiver declares an absolute existing `task_worktree`, independently of the terminal directory; legacy `worktree` is an accepted alias, and supplying conflicting aliases fails. Optional `pane_cwd` is checked against observation. Future operations compare the transport tuple (including pane_cwd) and check that task_worktree still exists, without inferring it from the terminal. It returns a fresh random `generation` even if the tuple is unchanged. Self-reported runtime ID/model/worktree are cooperative assertions, not proof of process authorship. Agent runtime changes that preserve tmux metadata require a renewed handshake.
 
 ## 2. Queue a task, then notify
 
@@ -58,7 +62,7 @@ Sender runs `send_task`:
 
 One unresolved task is allowed per worker. A repeated identical message ID returns its existing delivery status; changing payload under the same ID fails. `queued` establishes only durable intent. The recipient can read it with `read_updates` without any terminal notification.
 
-For a previously inspected empty main input, run `notify` with `worker`, `generation`, `task_id`, `message_id`, and a nonempty `ui_ready_evidence` describing the fresh inspection. It pastes a literal JSON envelope containing the store/helper paths, then presses Enter. It serializes participating helper calls on the socket/pane. A task-wide dedup record prevents repeated sends; the transport attempt is committed before keys so uncertain failures cannot silently resend. The UI can still change after inspection, or another program can type outside this lock. `ui_ready_evidence` is caller evidence, not an automated TUI assertion.
+For a previously inspected empty main input, run `notify` with `worker`, `generation`, `task_id`, `message_id`, and a nonempty `ui_ready_evidence` describing the fresh inspection. It pastes a literal JSON envelope containing the store/helper paths, then presses Enter. It serializes participating helper calls on the socket/pane. A per-message dedup record prevents repeated sends; the transport attempt is committed before keys so uncertain failures cannot silently resend. The UI can still change after inspection, or another program can type outside this lock. `ui_ready_evidence` is caller evidence, not an automated TUI assertion.
 
 ## 3. Receiver acceptance and state
 
@@ -74,9 +78,26 @@ Read `read_updates` using `{"worker":"codex-worker"}`. Inspect the queued task's
 }
 ```
 
-Only this explicit acceptance creates an ACK. Refusal is communicated by the receiver through the authorized channel and reconciled; `accepted:false` errors and never becomes acknowledged. The helper does not implement a separate `received` event. Never have the coordinator execute the receiver's ACK/report commands for convenience.
+Only this explicit acceptance creates an ACK; `acknowledge` with `accepted:false` still errors. To decline, the receiver runs `reject` with worker/generation/task/message/actor fields and a nonempty `reason`. It stores a rejection receipt, returns `delivery: rejected`, and releases the unaccepted task's reserved paths. An identical rejection returns its original receipt; a changed reason conflicts. Rejection after ACK fails: accepted work requires cancellation/reconciliation. The helper does not implement a separate `received` event. Never have the coordinator execute the receiver's ACK/report commands for convenience.
 
-Then run `report` with the same identity/task/message/actor fields, plus `state: "running"` and task-specific `evidence`. Valid work states: `running`, `waiting_approval`, `blocked`, `unknown`, `done`. `idle` comes from enrollment and cannot release an unfinished task. Refresh meaningful evidence within the configured freshness interval; no daemon or automatic heartbeat exists.
+Then run `report` with the same identity/task/message/actor fields, plus `state: "running"` and task-specific `evidence`. Valid work states: `running`, `waiting_approval`, `blocked`, `unknown`, `done`. `idle` comes from enrollment or pre-acceptance task rejection; it cannot release accepted unfinished work. Refresh meaningful evidence within the configured freshness interval; no daemon or automatic heartbeat exists.
+
+### Instructions during execution
+
+Use `send_update` instead of a second `send_task`:
+
+```json
+{
+  "worker": "codex-worker", "generation": "RETURNED_GENERATION",
+  "task_id": "task-unique-001", "message_id": "update-unique-002",
+  "update_of": "message-unique-001",
+  "message": "The answer to your interface question is option B, within the agreed scope."
+}
+```
+
+The original task must be accepted and active. `owned_paths`, `base_revision`, `acceptance` and worktree overrides are rejected. New message IDs have independent immutable payloads, notification attempts, ACKs and rejection receipts. Read the `update_queued` event; notify only when the intended UI is ready, or let the receiver poll. Receiver `acknowledge`/`reject` names the update message ID. Those operations resolve that update's delivery without changing original task claims, state, status evidence or timestamp. They do not attest application of the instruction. Continue execution reports on the original message ID.
+
+Current status lists `pending_updates`. `done` fails until each pending update has an ACK or rejection. Review the actual final tree/tests for accepted instructions; include unresolved application explicitly in the handoff. New updates after completion fail; identical retries return historic delivery. Reconciliation closes pending updates with explicit cancellation evidence. An update cannot silently expand scope or authorize new side effects.
 
 ## 4. Read current status and incremental events
 
@@ -105,7 +126,7 @@ A `report` of `done` also needs:
 
 This is the additional `handoff` field, merged into the normal `report` request with identity, actor, task, message, state, and evidence. Use JSON `null` for unavailable SHA; the illustrative string above is not a revision. If no checks/artifacts apply, empty arrays are allowed and the evidence must explain why. Digests and test claims are supplied by the receiver; helper validation checks shape, not actual artifact contents or test success. An unsuccessful result must describe the limitation, not imply the acceptance criteria passed. `done` releases claims; workers must stop writing those paths first. Reviewer verification remains required.
 
-Each revised handoff is a new immutable event with a strictly increasing revision for that message. It cannot overwrite a newer task's state. Current status may expire while historical completion remains available through events.
+Keep the exact report JSON file for retry. Same revision plus identical canonical report content (including evidence, handoff update time and test times/results) returns the stored report body, without a new event, freshness refresh or state write. This also works for an older revision after a newer handoff or task, within the same verified enrollment. Same revision with any changed content conflicts. A genuinely revised handoff must increase revision and cannot overwrite a newer task's state. Changing enrollment invalidates old receiver operations; read the historical store instead. Current status may expire while historical completion remains available through events.
 
 After a notification timeout/error/interruption, read status/events and inspect the UI. If no ACK and a fresh inspection establishes recovery is appropriate, `notify` may be called once more with the identical task/message, `retry:true`, fresh `ui_ready_evidence`, and `recovery_evidence` describing the ACK/status/input checks. Never use retry just because time elapsed. Do not paste again if the first body is staged or queued. At most two attempts are allowed, including an uncertain attempt; after that reconcile manually.
 

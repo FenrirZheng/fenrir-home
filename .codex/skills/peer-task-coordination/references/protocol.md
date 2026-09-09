@@ -11,6 +11,8 @@ This is a cooperative same-user coordination convention, not a Codex or Claude p
 | Queue | Sender durably recorded dispatch intent; does not assert transport or recipient acceptance |
 | Received (optional) | Recipient read/stored the envelope; does not assert acceptance |
 | ACK | Recipient explicitly accepts the exact task/message/generation; refusal never maps to acknowledged |
+| Update | New immutable message bound to the accepted active original task/message; separate ACK/rejection; no change to ownership, baseline, execution state or freshness |
+| Rejection | Recipient declines before acceptance, with an immutable reason; distinct from cancellation after acceptance |
 | Status | Task/message/generation, state, source-qualified evidence, observed time and freshness |
 | Event cursor | Storage epoch, enrollment generation and sequence; explicit reset/truncation on continuity loss |
 | Handoff | Task/message/generation, increasing revision, source SHA/dirty snapshot, tested revision/command/result/time, unresolved items, artifact paths/digests, update time |
@@ -22,7 +24,7 @@ Only the intended receiver authors acceptance and work reports. A same-user file
 
 ## Identity and continuity
 
-A tmux pane is a route. Include server start time/PID, session/pane/PID, command/worktree and runtime identity; check again before terminal actions. Runtime IDs and model evidence are self-reported unless independently available. Pane shell PID can outlive the model process. A title is not a session or model identifier.
+A tmux pane is a route. Include server start time/PID, session/pane/PID, command, observed `pane_cwd` and runtime identity; check again before terminal actions. `task_worktree` is a separately declared, validated absolute directory and may differ from pane_cwd. Tool cwd changes do not rebind a terminal. Runtime IDs and model evidence are self-reported unless independently available. Pane shell PID can outlive the model process. A title is not a session or model identifier.
 
 Use a fresh enrollment nonce, optionally included in a canonical identity hash, to invalidate old receipts even after a context reset that preserves all other fields. Independently renew the storage epoch on store replacement. Never silently preserve an old epoch while truncating/restoring history. The current helper does not prune history or support active snapshot rollback.
 
@@ -34,8 +36,14 @@ Persist dispatch and notification attempts separately. Before a retry, consume n
 
 Ownership includes generated output paths and shared resources. Validate baselines before edits and current revision before accepting tests. On restart or death, retain claims until old writers and partial work are reconciled. A changed identity does not automatically void old work or authorize takeover.
 
+Queue and resolve updates independently of task execution. Update ACK means accepted instruction, not applied/tested. The SQLite helper sees all queued updates and gates completion transactionally; sender/recipient implementations with separate ledgers also need a dispatcher check for sent-but-unreceived updates. Do not claim completion from the recipient's gate alone when it cannot see those updates.
+
+Completion retries use immutable supplied content. An identical revision returns its original receipt before any effects, even when a later revision exists; changed evidence under that revision conflicts. Test timestamps are evidence and cannot be discarded to make a retry appear identical. Read-only status/events never initialize a store. These are 1.1 helper semantics within peer-task/v1; do not mix old writers with new update/rejection records.
+
 ## Native channels and cross-helper exchange
 
 For available native Codex agents, send the same task envelope using the tool actually exposed in the current session and ask the receiver to return a structured ACK. Retain the actual tool response as provenance, together with any task-owned event/handoff artifact. Native send success without a recipient response is pending. Do not invent a runtime API or require tmux for an agent reachable natively.
 
 For the independently developed Claude `peer-task` helper, read its current `SKILL.md` and protocol reference before adapting. For this iteration use explicit recipient-authored JSON/file handoffs or have both peers invoke the same installed Codex helper/store. Do not parse Claude JSONL using the Codex opaque cursor or convert a `received`/refused/stale ACK into acceptance. An adapter must explicitly map event type, generation, task/message identity, acceptance, timestamps, cursor epochs and artifact revision semantics; no automatic adapter is shipped here.
+
+Cross-read handoff mapping: Codex `tests[].tested_revision` maps to Claude's `tests[].source_sha` plus `dirty_digest`; Codex `source_note` maps to Claude's SHA limitation in `summary`/`limits`. Match artifact `path`/`sha256`, not cross-helper whole-document digests, because the schemas differ. Claude explicit imported-revision replay and Codex exact report replay are different CLI operations with the same no-repeat-effects requirement. Codex expires all work states after its configured TTL; Claude's documented state-specific TTL rules differ. Preserve that distinction when interpreting current status versus historical completion.
