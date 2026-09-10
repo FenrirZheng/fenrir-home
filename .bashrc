@@ -163,9 +163,20 @@ export USE_BUILTIN_RIPGREP=0
 #   emacs-gui : `-c' opens a new GUI frame (blocks too -- suffix with ` &'
 #               from the terminal if you want the prompt back immediately,
 #               or use `emacsclient -nc' for a fire-and-forget variant).
+#
+# `-d' on emacs-gui is load-bearing.  emacsclient picks GUI-vs-tty from its OWN
+# environment, not the daemon's: with no DISPLAY it silently asks for a terminal
+# frame instead of failing, so `emacs-gui' opens in the terminal and looks like
+# a broken Emacs config.  tmux is how DISPLAY goes missing here -- attaching a
+# session from a client that has no X environment (an ssh window) makes
+# `update-environment' record DISPLAY and XAUTHORITY as REMOVED for that
+# session (`tmux show-environment' prints them as `-DISPLAY' / `-XAUTHORITY'),
+# and every pane created afterwards starts without them.  Pinning the display
+# here keeps the alias working through that; `tmux set-environment -u DISPLAY'
+# (same for XAUTHORITY) clears the removal markers for the session itself.
 alias emacs='emacsclient -t -a ""'
 alias emacs-tui='emacsclient -t -a ""'
-alias emacs-gui='emacsclient -c -a ""'
+alias emacs-gui='emacsclient -c -a "" -d "${DISPLAY:-:0}"'
 
 # debain system fd naming as fdfind
 # sudo apt install bfs
