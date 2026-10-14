@@ -53,6 +53,8 @@ Operational consequences:
 
 `fenrir-tools/` holds the user's own ACP helper CLIs as independent git repos (see [`GITS.org`](GITS.org) for remotes and build instructions). The parent dotfiles repo does NOT track them.
 
+A helper binary that exists for the Emacs config (run by `~/.emacs.d/lisp/`) does **not** go here: it goes in [`~/.emacs.d/rust/`](.emacs.d/rust/README.md) and deploys to `rust/lib/` (precedents: `libsrc-classes`, `git-subtree-status`). Read that README's scope rule before creating a new tool.
+
 `~/.local/bin/{claud-chat,claude-chat}` are symlinks into these checkouts' build outputs. The symlinks are **not tracked** (`.local/bin/` is deny-then-whitelist and they aren't whitelisted) — recreate them after a fresh clone + build:
 
 ```bash
