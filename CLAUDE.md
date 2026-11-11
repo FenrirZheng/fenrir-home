@@ -83,43 +83,7 @@ Tool/skill-internal guidance belongs in `.claude/`'s own docs (its `CLAUDE.md`, 
 
 ## Keyboard remapping (keyd)
 
-Physical-key remapping is done by [`keyd`](https://github.com/rvaiya/keyd) (system service, runs as root). keyd 2.5+ reads **only `/etc/keyd/*.conf`** — it does not look at `~/.config/keyd/` (re-verify: on keyd upgrade). So [`.config/keyd/default.conf`](.config/keyd/default.conf), a tracked file of the [`.config/` repo](#config-xdg-config-repo), is the **source of truth**; `/etc/keyd/default.conf` is a deployed copy. Deploy / re-deploy:
-
-```bash
-sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl restart keyd
-```
-
-If you ever edit `/etc/keyd/default.conf` in place (e.g. quick experiment), **copy it back** to `~/.config/keyd/default.conf` and commit it in the `.config` repo, or the two drift. Rollback: `sudo systemctl stop keyd` (keyboard returns to stock behaviour), or restore one of the `default.conf.bak.*` siblings that live next to the deployed file in `/etc/keyd/`.
-
-Current physical → logical map (laptop AT keyboard + 2 Logitech wireless; `[ids] *` covers all):
-
-| physical key | behaviour | why |
-|---|---|---|
-| CapsLock | plain LeftCtrl | single-function — no tap/hold ambiguity |
-| Right Alt | IME toggle (`command(/usr/local/bin/fcitx5-toggle)`) | dedicated single-function key; `us` layout doesn't use AltGr |
-| Left Ctrl (bottom-left) | Super (`layer(meta)`) | corner key = Windows/Super, like a Mac; `layer(meta)` not bare `leftmeta` so it works as a real modifier in chords (keyd warns against bare meta on RHS) |
-| Left Win | tap = Super (GNOME Activities), hold = `opt` layer (word-jump: `C-left/right/backspace`) | |
-| Right Ctrl, Left Alt | unchanged | |
-
-The IME toggle calls `/usr/local/bin/fcitx5-toggle` (root → drops to user `fenrir`'s session bus → `fcitx5-remote -t`). That script is **not tracked** (it's in `/usr/local/bin/`); recreate it on a fresh machine:
-
-```bash
-sudo tee /usr/local/bin/fcitx5-toggle >/dev/null <<'EOF'
-#!/bin/bash
-# Toggle fcitx5 IM state. Called by keyd (RightAlt) — keyd runs as root, so drop
-# to user fenrir's session bus to reach the fenrir-owned fcitx5 daemon.
-exec /usr/sbin/runuser -u fenrir -- env \
-  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
-  XDG_RUNTIME_DIR=/run/user/1000 \
-  DISPLAY=:0 \
-  /usr/bin/fcitx5-remote -t
-EOF
-sudo chmod +x /usr/local/bin/fcitx5-toggle
-```
-
-`fcitx5` itself: [`/.config/fcitx5/config`](.config/fcitx5/config) keeps `TriggerKeys=F13` as a vestigial no-op (nothing emits F13 here) — the real toggle is the keyd→RightAlt→DBus path above; the `[Hotkey]` comment in that file says so.
-
-Input methods: fcitx5's IM list is `keyboard-us`, `rime` (default), `chewing` — the profile is [`.config/fcitx5/profile`](.config/fcitx5/profile), tracked by the [`.config/` repo](#config-xdg-config-repo). Rime schema selection (注音: `bopomofo_tw`, `bopomofo`) is [`.local/share/fcitx5/rime/default.custom.yaml`](.local/share/fcitx5/rime/default.custom.yaml), tracked via the `.local/` whitelist in [`.gitignore`](.gitignore); rime's `build/` and `*.userdb/` next to it stay untracked. Fresh machine: `apt install fcitx5-rime rime-data-bopomofo` (see fresh-clone step 7), then add rime to the IM group with `fcitx5-configtool` or the DBus `SetInputMethodGroupInfo` call.
+Physical keys are remapped by keyd; `~/.config/keyd/default.conf` is the source of truth and `/etc/keyd/default.conf` a deployed copy. **Read [`docs/keyd.org`](docs/keyd.org) before touching keyd, fcitx5, rime or the RightAlt IME toggle** — it has the deploy command, the key map and the `fcitx5-toggle` script body.
 
 ## Commit conventions
 
@@ -156,41 +120,7 @@ If the hook blocks a commit: read the failure mode and fix the underlying issue.
 
 ## Fresh-clone bootstrap
 
-After cloning into `$HOME` on a new machine:
-
-1. `git -C ~ config status.showUntrackedFiles normal` — the git default, so on a fresh clone there is usually nothing to do; run it only if an inherited config says otherwise. `git status` then lists the untracked `$HOME` noise with directories collapsed (see [Repo shape](#repo-shape)).
-2. `git -C ~ config core.hooksPath .githooks` — wire up pre-commit (`core.hooksPath` is local config, not tracked). **Optional, and currently NOT applied on this machine** — see the [pre-commit guard section](#git-pre-commit-guard). Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
-3. Clone all related repos listed in [`GITS.org`](GITS.org) to their expected paths (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/`, `fenrir-tools/{claud-chat-acp,claude-agentic-chat}`).
-4. tmux: `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, then `bash ~/.tmux/tools/build-all.sh` (cargo, the cmake builds for `sift` and `pane-jump`, the Meson build for `cc-main-menu`) — see the [tmux repo section](#tmux-tmux-config-repo). Required new dependencies: a C++20 compiler (g++ ≥ 10), `cmake`, and for `cc-main-menu` also `meson` (≥ 1.1), `ninja` and network on the first build (Meson clones FTXUI v5.0.0); `sift` and `pane-jump` need no libraries beyond libc. `ninja` (`apt install ninja-build`) is therefore required for `cc-main-menu`; for the two cmake tools it is optional — only the `cmake --preset` spelling in that section wants it, and `build-all.sh` uses the generator-less commands.
-5. fenrir-tools: build both CLIs, recreate symlinks — see [fenrir-tools section](#fenrir-tools-locally-developed-cli-tools).
-6. Install gitleaks to `~/.local/bin/gitleaks` from [upstream releases](https://github.com/gitleaks/gitleaks/releases) (binary, not tracked) — required **only if** you wired the hook in step 2; it is also useful on its own for a manual `gitleaks git --staged` run.
-7. Keyboard remap: install `keyd`, `fcitx5-rime`, `rime-data-bopomofo`, recreate `/usr/local/bin/fcitx5-toggle` and deploy the keyd config — `sudo cp ~/.config/keyd/default.conf /etc/keyd/default.conf && sudo systemctl enable --now keyd`. See the [Keyboard remapping section](#keyboard-remapping-keyd) for the `fcitx5-toggle` script body.
-8. Terminal font: install **DejaVuSansM Nerd Font** (font files, not tracked anywhere — same class of manual dependency as gitleaks). [`.config/alacritty/alacritty.toml`](.config/alacritty/alacritty.toml), tracked by the [`.config/` repo](#config-xdg-config-repo), names the plain variant (`DejaVuSansM Nerd Font`, deliberately NOT `…Mono` — Mono shrinks icons into one cell), and without the font the tmux status bar's powerline caps and PUA icons degrade to overlapping tofu (the 2026-08-24 incident that motivated this step):
-
-   ```bash
-   mkdir -p ~/.local/share/fonts/DejaVuSansMNerdFont
-   curl -sL -o /tmp/DejaVuSansMono.zip \
-     https://github.com/ryanoasis/nerd-fonts/releases/latest/download/DejaVuSansMono.zip
-   unzip -oq /tmp/DejaVuSansMono.zip -d ~/.local/share/fonts/DejaVuSansMNerdFont 'DejaVuSansMNerdFont*.ttf'
-   fc-cache -f ~/.local/share/fonts
-   ```
-
-   (Release asset is named `DejaVuSansMono.zip`; the family inside is `DejaVuSansM Nerd Font`.)
-
-Verify with `git -C ~ status`: no modified or staged files; a few hundred untracked `??` entries are expected.
-
-If you chose to wire the hook in step 2, verify **that it actually runs** — an
-empty commit succeeds identically whether the hook fires or not, so on its own it
-proves nothing:
-
-```bash
-git -C ~ config --get core.hooksPath          # must print .githooks
-git -C ~ commit --allow-empty -m test 2>&1 | grep 'pre-commit: gitleaks'
-git -C ~ reset --soft HEAD~1
-```
-
-Absence of that `pre-commit: gitleaks` line means the guard is not in the path,
-whatever the config says.
+Setting up a new machine: follow [`docs/fresh-clone.org`](docs/fresh-clone.org) (8 steps — git config, related repos, tmux toolset build, fenrir-tools, gitleaks, keyd, Nerd Font — and the hook-wiring verification).
 
 ## Don't
 
