@@ -5,6 +5,7 @@ Project-level guidance for `/home/fenrir`, a single-machine **home-directory dot
 ## Repo shape
 
 - Working tree is the entire home directory. Multiple independent git repos live under `$HOME` (`.claude/`, `.tmux/`, `.emacs.d/`, `.config/`, `fenrir-tools/`, plus unrelated clones in `code/`, `WebstormProjects/`, `Documents/`). **None are submodules** — they are standalone clones, and they show up as untracked entries in `git status`. [`GITS.org`](GITS.org) is the authoritative list of related repos (remotes, paths, build instructions).
+- **The git dir is `~/.dotfiles.git`, not `~/.git`, and the repo is driven through [`dotgit`](.local/bin/dotgit)** (2026-11-12). `$HOME` deliberately holds no `.git` entry: while it did, every non-git folder under `$HOME` resolved to `/home/fenrir` as its git root (probe: `git -C ~/plans rev-parse --show-toplevel`), so git, editors and search tools treated `plans/`, `Documents/`, `code/` as part of this repo. `dotgit` is `git --git-dir=~/.dotfiles.git --work-tree=~`; wherever this file or the docs say `git` for the dotfiles repo, run `dotgit`. Plain `git` at `$HOME` or in a tracked subfolder (`docs/`, `.shell.d/`) answers "not a git repository" — that is the intended state. Don't use `git init --separate-git-dir`: it leaves a `.git` *file* in `$HOME`, which is discovered just the same.
 - **Strategy: `status.showUntrackedFiles=normal` + slim deny-then-whitelist `.gitignore`** (user decision 2026-09-02; it was `no` from the 2026-05-09 rebuild, root commit `e5d70b7`, until then). The repo's history before that commit was discarded — only one user, no collaborators, so the rebuild was free.
   - **`$HOME` root noise** (caches, creds, IDE state, language toolchains, nested project repos, app state) is left visible as untracked, NOT covered by `.gitignore` rules. `git status` collapses whole untracked directories, so it lists **237 top-level `??` entries in 0.013 s**; `-uall` expands the same tree to **1,250,405 entries in 12.7 s** (probe: `git -C /home/fenrir status --porcelain [-uall] | grep -c '^??'`, git 2.47.3, 2026-09-02). Only the collapsed form is usable day to day — don't make `-uall` the default.
   - **`.local/`, `.gemini/`**: deny-then-whitelist. These dirs need positive containment so `git add <dir>` doesn't sweep in `oauth_creds.json`-style siblings. Explicit `!`-rule per file/subdir we want. **`.config/`** is plain deny (`/.config/*`, no whitelist) — `.config/` is itself one independent clone (see [`.config/`: XDG config repo](#config-xdg-config-repo)); the deny rule prevents accidental sweeps.
@@ -14,7 +15,7 @@ Project-level guidance for `/home/fenrir`, a single-machine **home-directory dot
 
 ## `.tmux/`: tmux config repo
 
-`.tmux/` is an independent git repo (remote: `FenrirZheng/config-tmux`; see [`GITS.org`](GITS.org)). The parent dotfiles repo does NOT track it. `~/.tmux.conf` is a symlink to [`.tmux/tmux.conf`](.tmux/tmux.conf) and shows up as an untracked entry in `git -C ~ status`.
+`.tmux/` is an independent git repo (remote: `FenrirZheng/config-tmux`; see [`GITS.org`](GITS.org)). The parent dotfiles repo does NOT track it. `~/.tmux.conf` is a symlink to [`.tmux/tmux.conf`](.tmux/tmux.conf) and shows up as an untracked entry in `dotgit status`.
 
 Inside that repo, three kinds of content:
 
@@ -94,8 +95,11 @@ Subject line: `<area>: <verb> <thing>` (`tmux: add TPM plugin scaffolding`). His
 ## Git pre-commit guard
 
 > ⚠️ **NOT CURRENTLY WIRED — this guard does not run.** Measured 2026-08-18:
-> `git -C ~ config --get core.hooksPath` returns **`/home/fenrir/.git/hooks`**,
-> not `.githooks`, and that directory holds only `*.sample`. So no pre-commit
+> `core.hooksPath` was **`/home/fenrir/.git/hooks`**, not `.githooks`, and that
+> directory held only `*.sample`. On 2026-11-12 the git dir moved to
+> `~/.dotfiles.git` and the setting was unset (the absolute path would dangle), so
+> git falls back to `~/.dotfiles.git/hooks` — the same samples (probe:
+> `dotgit config --get core.hooksPath` prints nothing). So no pre-commit
 > check runs on this clone today, and nothing below is in force until the wiring
 > command is re-run. The rest of this section describes the hook's *design*, kept
 > because the file is still tracked and still works if re-enabled.
@@ -106,7 +110,7 @@ Subject line: `<area>: <verb> <thing>` (`tmux: add TPM plugin scaffolding`). His
 > document asserting a guard is active is not evidence that it is; only reading
 > the config is.
 
-Tracked at [`.githooks/pre-commit`](.githooks/pre-commit), wired per-clone via `git config core.hooksPath .githooks`. After a fresh clone you must re-run that command — `core.hooksPath` is a local config, not tracked in `.git/config` outside the clone. **That is exactly how it came to be un-wired here**: the setting is per-clone and nothing re-applies it.
+Tracked at [`.githooks/pre-commit`](.githooks/pre-commit), wired per-clone via `dotgit config core.hooksPath .githooks`. After a fresh clone you must re-run that command — `core.hooksPath` is a local config, not tracked in `.git/config` outside the clone. **That is exactly how it came to be un-wired here**: the setting is per-clone and nothing re-applies it.
 
 The hook resolves its scanner as `$repo_root/.local/bin/gitleaks`, i.e. *relative to the repo it runs in*, and `exit 1`s if that path is not executable. It therefore only works in this `$HOME` clone — pointing another repo's `core.hooksPath` at it would not scan anything, it would **block every commit there** with a "not found" failure.
 
@@ -124,7 +128,7 @@ Setting up a new machine: follow [`docs/fresh-clone.org`](docs/fresh-clone.org) 
 
 ## Don't
 
-- **Never `git add .` or `git add -A` at `$HOME`.** `add .` walks the actual filesystem and would stage every one of the ~1.25M items the slim `.gitignore` doesn't deny — and it only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list. The untracked noise being visible in `git status` is not containment. `git add <specific-path>` always; never the cwd shortcut.
+- **Never `git add .` or `git add -A` at `$HOME`** — which now means `dotgit add .` / `dotgit add -A`; the wrapper changes nothing about the danger. `add .` walks the actual filesystem and would stage every one of the ~1.25M items the slim `.gitignore` doesn't deny — and it only denies app-state regions and build artefacts; vast tracts of `$HOME` (caches, creds, history files, downloads) are NOT in the deny list. The untracked noise being visible in `git status` is not containment. `git add <specific-path>` always; never the cwd shortcut.
 - **Never `git add .` or `git add -A` inside `~/.config` either.** That repo has 81 top-level entries and no root `.gitignore` by choice (see [`.config/`: XDG config repo](#config-xdg-config-repo)), so `add .` would stage `gh/`, `age/`, `sops/`, browser profiles and the rest of the untracked app state sitting next to the 18 tracked files. Same rule as at `$HOME`: `git add <specific-path>`.
 - Don't repopulate the old `$HOME`-root deny list in `.gitignore`. It was deliberately deleted in the `e5d70b7` rebuild because it was unmaintainable — every new app drops a new dir to chase. The user chose visible untracked noise over hiding or chasing it (2026-09-02), so a `??` line for `/.someapp/` is the expected state, not a bug to fix with a new ignore rule.
 - Don't restore `.config/fcitx5/conf/cached_layouts` to tracked. fcitx5 rewrites it on every run; the rebuild intentionally dropped it. Its guard is line 3 of [`.config/fcitx5/.gitignore`](.config/fcitx5/.gitignore), which still fires after the six per-app repos were merged into the `.config` repo (probe: `git -C ~/.config check-ignore -v fcitx5/conf/cached_layouts`, 2026-09-03). If `git status -uall` shows the file as untracked, that's correct — let fcitx5 own it.

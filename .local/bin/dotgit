@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Git for the $HOME dotfiles repo. The git dir lives at ~/.dotfiles.git so that
+# $HOME holds no .git entry and non-git subfolders are not seen as part of it.
+exec git --git-dir="$HOME/.dotfiles.git" --work-tree="$HOME" "$@"

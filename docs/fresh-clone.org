@@ -6,11 +6,22 @@ Moved out of ~/CLAUDE.md on 2026-11-12 so it loads only when needed; paths are r
 :PROPERTIES:
 :CUSTOM_ID: fresh-clone-bootstrap
 :END:
-After cloning into =$HOME= on a new machine:
+The git dir is =~/.dotfiles.git=, never =~/.git= (see [[file:../CLAUDE.md::#repo-shape][Repo shape]]), so the clone is a bare clone turned into a work tree at =$HOME=:
 
-1. =git -C ~ config status.showUntrackedFiles normal= --- the git default, so on a fresh clone there is usually nothing to do; run it only if an inherited config says otherwise. =git status= then lists the untracked =$HOME= noise with directories collapsed (see [[file:../CLAUDE.md::#repo-shape][Repo shape]]).
+#+begin_src sh
+G="git --git-dir=$HOME/.dotfiles.git"
+git clone --bare <dotfiles remote> ~/.dotfiles.git
+$G config core.bare false
+$G config core.worktree "$HOME"
+$G config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+$G --work-tree="$HOME" checkout   # stops on files that already exist (.bashrc, .profile): move them aside, re-run
+#+end_src
 
-2. =git -C ~ config core.hooksPath .githooks= --- wire up pre-commit (=core.hooksPath= is local config, not tracked). *Optional, and currently NOT applied on this machine* --- see the [[file:../CLAUDE.md::#git-pre-commit-guard][pre-commit guard section]]. Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
+The checkout puts =~/.local/bin/dotgit= in place; from here on every command for this repo is =dotgit …=. Then:
+
+1. =dotgit config status.showUntrackedFiles normal= --- the git default, so on a fresh clone there is usually nothing to do; run it only if an inherited config says otherwise. =dotgit status= then lists the untracked =$HOME= noise with directories collapsed (see [[file:../CLAUDE.md::#repo-shape][Repo shape]]).
+
+2. =dotgit config core.hooksPath .githooks= --- wire up pre-commit (=core.hooksPath= is local config, not tracked). *Optional, and currently NOT applied on this machine* --- see the [[file:../CLAUDE.md::#git-pre-commit-guard][pre-commit guard section]]. Skip it deliberately if you don't want the gitleaks gate; just don't leave the docs claiming it's on.
 
 3. Clone all related repos listed in [[file:../GITS.org][=GITS.org=]] to their expected paths (=.claude/=, =.tmux/=, =.emacs.d/=, =.config/=, =fenrir-tools/{claud-chat-acp,claude-agentic-chat}=).
 
@@ -34,16 +45,16 @@ After cloning into =$HOME= on a new machine:
 
    (Release asset is named =DejaVuSansMono.zip=; the family inside is =DejaVuSansM Nerd Font=.)
 
-Verify with =git -C ~ status=: no modified or staged files; a few hundred untracked =??= entries are expected.
+Verify with =dotgit status=: no modified or staged files; a few hundred untracked =??= entries are expected.
 
 If you chose to wire the hook in step 2, verify *that it actually runs* --- an
 empty commit succeeds identically whether the hook fires or not, so on its own it
 proves nothing:
 
 #+begin_src sh
-git -C ~ config --get core.hooksPath          # must print .githooks
-git -C ~ commit --allow-empty -m test 2>&1 | grep 'pre-commit: gitleaks'
-git -C ~ reset --soft HEAD~1
+dotgit config --get core.hooksPath          # must print .githooks
+dotgit commit --allow-empty -m test 2>&1 | grep 'pre-commit: gitleaks'
+dotgit reset --soft HEAD~1
 #+end_src
 
 Absence of that =pre-commit: gitleaks= line means the guard is not in the path,

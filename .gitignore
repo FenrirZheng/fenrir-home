@@ -23,6 +23,10 @@
 #   - Under .local/, .gemini/: add a `!`-rule per level, same pattern as before
 #     (`!/.local/foo/`, `!/.local/foo/**`). Open every directory level.
 
+# The git dir is ~/.dotfiles.git (2026-11-12), reached through ~/.local/bin/dotgit;
+# every `git` above means `dotgit`. Keep the git dir itself out of status and adds.
+/.dotfiles.git/
+
 # editor / shell backups (apply repo-wide so they don't sneak into tracked subtrees)
 *~
 *.swp
@@ -59,6 +63,7 @@
 /.local/bin/*
 !/.local/bin/claude-editor
 !/.local/bin/claude-editor-gui
+!/.local/bin/dotgit
 !/.local/bin/mqpub
 !/.local/bin/mqsend
 !/.local/bin/mqstop
