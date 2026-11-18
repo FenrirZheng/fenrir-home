@@ -48,7 +48,7 @@ Operational consequences:
 - **Reload after editing config**: `tmux source-file ~/.tmux.conf` — re-runs TPM plus the explicit `run-shell` loaders (thumbs, ace-window, `claude.conf`).
 - **Adding an upstream plugin**: add the `@plugin` line, `prefix + I`, **then add its directory to [`.tmux/.gitignore`](.tmux/.gitignore)** — the exclusions are per-plugin, so a newly cloned one shows up as untracked in `git -C ~/.tmux status` until you list it.
 - **Fresh machine**: clone the tmux config repo to `~/.tmux/`, then `ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf`, `prefix + I`, and run `bash ~/.tmux/tools/build-all.sh` — `cargo build --release` alone leaves `prefix /`, `prefix g` and `prefix m` bound to "not built" stubs. See [`GITS.org`](GITS.org) for the remote URL.
-- tmux-side documentation lives in that repo — [`README.md`](.tmux/README.md), [`runbooks/`](.tmux/runbooks), [`docs/adr/`](.tmux/docs/adr), [`plans/`](.tmux/plans).
+- tmux-side documentation lives in that repo — [`README.md`](.tmux/README.md), [`runbooks/`](.tmux/runbooks), [`docs/adr/`](.tmux/docs/adr).
 
 ## fenrir-tools/: locally-developed CLI tools
 
