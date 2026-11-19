@@ -1,0 +1,8 @@
+### Fortinet SSL VPN
+### Usage: sudo openfortivpn -c /etc/openfortivpn/config
+
+host = 211.20.122.129
+port = 57002
+username = fenrir
+password = RuwP!pzuyvTv6J6AlOPS
+trusted-cert = 6313198a23b9371fefa063936e8ee5c7845bfcbec0b8342f44b9ea831b43a3c5

@@ -43,17 +43,27 @@
 **/Thumbs.db
 
 # ============================================================
-# .config/: ~/.config is itself one independent git repo
-# (remote in GITS.org). Since 2026-09-03 it owns the whole
-# tracked .config tree — the six per-app clones that used to
-# sit inside it are ordinary directories of that repo now.
-# It is NOT tracked by the parent dotfiles repo; it shows up as
-# `?? .config/` under status.showUntrackedFiles=normal. The deny
-# rule below prevents an accidental `git add .config/` here from
-# sweeping in app state. Its own ignore rules live inside that
-# repo, in per-directory .gitignore files — don't mirror them here.
+# .config/: deny-then-whitelist (merged from ~/.config/.git on 2026-11-19)
 # ============================================================
+# Per-directory .gitignore files inside autostart/, environment.d/, and fcitx5/
+# continue to filter third-party/cached files within those whitelisted dirs.
 /.config/*
+!/.config/alacritty/
+!/.config/alacritty/**
+!/.config/alarm-services/
+/.config/alarm-services/*
+!/.config/alarm-services/IG-PRD-02/
+!/.config/alarm-services/IG-PRD-02/**
+!/.config/autostart/
+!/.config/environment.d/
+!/.config/fcitx5/
+!/.config/keyd/
+!/.config/keyd/**
+!/.config/openfortivpn/
+/.config/openfortivpn/*
+!/.config/openfortivpn/config
+!/.config/systemd/
+!/.config/systemd/**
 
 # ============================================================
 # .local/: deny-then-whitelist

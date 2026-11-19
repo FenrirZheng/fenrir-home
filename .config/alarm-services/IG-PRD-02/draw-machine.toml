@@ -1,0 +1,26 @@
+# alarm-agent config for draw-machine on IG-PRD-02 (HG-Prd-02). Kept outside ~/code/ig_lottery on purpose
+# (global documentation rule for this host's services). Live recon 2026-10-02.
+# No secrets here — GCHAT_WEBHOOK_URL comes from /etc/alarm-agent/secrets.env.
+host_label = "IG-PRD-02"
+interval_secs = 30
+
+[alert]
+consecutive = 2          # 2 × 30 s before a condition alert fires
+repeat_minutes = 60
+
+[jvm]
+name = "draw-machine"
+# OpenJDK 21 (el9 package), G1, -jar bin/drawingmachine-1.0-SNAPSHOT.jar in /home/hg/draw-machine
+cmdline_contains = ["java", "bin/drawingmachine-1.0-SNAPSHOT.jar"]
+hsperf_dir = "/tmp/hsperfdata_hg"
+heap_warn_pct = 85       # of -Xmx1536m
+heap_crit_pct = 95
+heap_consecutive = 3     # "used" swings between GC cycles
+metaspace_warn_pct = 90  # of -XX:MaxMetaspaceSize from java.rt.vmArgs (0.5.1+); unset = logged, not checked
+gc_pause_warn_ms = 1000  # summed GC pause time within one 30 s interval
+threads_warn = 1000      # 66 live on 2026-10-02
+# jar sha256 → git hash; append `<jar sha256>\t<git>\t<label>` before each restart.
+versions_file = "/etc/alarm-agent/versions.tsv"
+
+[service]
+units = ["draw-machine.service"]

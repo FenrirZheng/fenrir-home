@@ -1,0 +1,5 @@
+# Other apps may drop *.conf into ~/.config/environment.d/.
+# Whitelist only what this repo deliberately tracks.
+/*
+!/.gitignore
+!/im-fcitx5.conf

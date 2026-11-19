@@ -1,0 +1,5 @@
+# Third-party apps drop their own .desktop files + mimeinfo.cache here.
+# Whitelist only what this repo deliberately tracks (the fcitx5 autostart).
+/*
+!/.gitignore
+!/org.fcitx.Fcitx5.desktop

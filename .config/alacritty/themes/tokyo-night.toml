@@ -1,0 +1,80 @@
+[colors.primary]
+background = "#1a1b26"
+foreground = "#c0caf5"
+# dim_foreground is what alacritty paints for SGR 2 (faint) over the DEFAULT
+# foreground — dim text that carries its own color is unaffected. Unset, it is
+# auto-computed as foreground x 2/3 (#c0caf5 -> ~#7f85a2), which at opacity 0.95
+# is unreadable. Claude Code renders the `UserPromptSubmit says:` hook banner as
+# exactly that (hook_system_message passes no color and defaults dimColor true,
+# verified in versions/2.1.268), and the hook cannot colour it itself:
+# systemMessage is run through Bun.stripANSI before storage, so the terminal is
+# the only lever. #ff9e64 is the theme's own orange — it is also the
+# colors.search.focused_match background. (It used to be colors.indexed_colors
+# index 16 too; that entry was removed — see the note at the end of this file.
+# d225b14's message named colors.hints.start here; that one is #e0af68.)
+dim_foreground = "#ff9e64"
+
+[colors.cursor]
+text   = "#1a1b26"
+cursor = "#c0caf5"
+
+[colors.vi_mode_cursor]
+text   = "#1a1b26"
+cursor = "#c0caf5"
+
+[colors.search.matches]
+foreground = "#1a1b26"
+background = "#a9b1d6"
+
+[colors.search.focused_match]
+foreground = "#1a1b26"
+background = "#ff9e64"
+
+[colors.footer_bar]
+foreground = "#c0caf5"
+background = "#1a1b26"
+
+[colors.hints.start]
+foreground = "#1a1b26"
+background = "#e0af68"
+
+[colors.hints.end]
+foreground = "#1a1b26"
+background = "#a9b1d6"
+
+[colors.selection]
+text       = "CellForeground"
+background = "#283457"
+
+[colors.normal]
+black   = "#15161e"
+red     = "#f7768e"
+green   = "#9ece6a"
+yellow  = "#e0af68"
+blue    = "#7aa2f7"
+magenta = "#bb9af7"
+cyan    = "#7dcfff"
+white   = "#a9b1d6"
+
+[colors.bright]
+black   = "#414868"
+red     = "#f7768e"
+green   = "#9ece6a"
+yellow  = "#e0af68"
+blue    = "#7aa2f7"
+magenta = "#bb9af7"
+cyan    = "#7dcfff"
+white   = "#c0caf5"
+
+# No [[colors.indexed_colors]] here, deliberately. Upstream tokyo-night ships two
+# entries — index 16 = #ff9e64 (orange) and index 17 = #db4b4b (red) — treating
+# those slots as spare accent colors. They are not spare: 16 and 17 are the first
+# two cells of the standard xterm-256 6x6x6 color cube, #000000 and #00005f, and
+# any program that asks for near-black through the 256-color palette lands on
+# them. Claude Code does exactly that — it writes 256-color indices, never
+# 38;2;r;g;b (probe: `tmux capture-pane -p -e` over its panes, 2026-09-11, which
+# showed 48;5;16 in live scrollback). With the overrides in place its black
+# backgrounds came out orange and its dark-navy diff-added background
+# (dark-daltonized diffAdded = rgb(0,68,102) -> 48;5;17) came out as a solid
+# #db4b4b block over every added line. Re-syncing the upstream theme file would
+# silently bring the hijack back; don't let it.

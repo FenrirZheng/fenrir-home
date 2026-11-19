@@ -1,0 +1,5 @@
+# sha256<TAB>git hash<TAB>label (jar sha256, or tree sha256 of the exploded webapp for version_dir) — read by alarm-agent on every new JVM pid.
+# Add one line per deployed build BEFORE the restart; "-" = git hash not recorded.
+f7c6c1a55553da9ed2fe1a590ca9e548874d1ae317cc08ae2ebbbce1813bc51a	-	monitor build running on 2026-10-02, git not recorded
+d1d8a21608121c7f6ce770cfcba4b8f24317313bab5ae645633a79f9cd3b6f45	-	draw-machine build running on 2026-10-02, git not recorded
+8e9845cbcf84af7b59e824972538893852da58f2617b012ea4743901d90659a0	de5ea8a2d	monitor hotfix de5ea8a2d (polls GFC_IG over Dubbo), 2026-10-28

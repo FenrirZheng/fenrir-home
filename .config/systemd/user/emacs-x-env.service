@@ -1,0 +1,14 @@
+[Unit]
+Description=Push X session env (DISPLAY/XAUTHORITY/WAYLAND_DISPLAY) into running Emacs daemon
+After=emacs.service graphical-session.target
+Requires=emacs.service
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.config/systemd/user/emacs-x-env.sh push
+ExecStop=%h/.config/systemd/user/emacs-x-env.sh clear
+
+[Install]
+WantedBy=graphical-session.target

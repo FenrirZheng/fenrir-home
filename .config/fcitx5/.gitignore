@@ -1,0 +1,3 @@
+# fcitx5 rewrites conf/cached_layouts on every run.
+# Whitelist only the curated config; keep cached_layouts opaque.
+/conf/cached_layouts

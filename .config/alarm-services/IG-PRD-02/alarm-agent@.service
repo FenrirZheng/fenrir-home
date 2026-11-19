@@ -1,0 +1,25 @@
+[Unit]
+Description=alarm-agent: %i JVM + unit monitoring -> Google Chat
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# One instance per JVM on this host; %i names both the config and the watched unit.
+# Same uid as the JVMs: needed to read /tmp/hsperfdata_hg/<pid> (mode 600).
+User=hg
+Group=hg
+# root:root 0600; systemd reads it before dropping to User=. Holds GCHAT_WEBHOOK_URL only.
+EnvironmentFile=/etc/alarm-agent/secrets.env
+ExecStart=/usr/local/bin/alarm-agent --config /etc/alarm-agent/%i.toml
+Restart=always
+RestartSec=10
+
+MemoryMax=64M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+# Must stay off: the agent reads the JVMs' /tmp/hsperfdata_hg.
+PrivateTmp=no
+
+[Install]
+WantedBy=multi-user.target
