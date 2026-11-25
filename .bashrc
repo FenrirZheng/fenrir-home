@@ -130,24 +130,21 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-# EDITOR/VISUAL point at wrapper scripts, NOT directly at `emacsclient -t -a ""'.
-# Claude Code's Ctrl+G launches $EDITOR via naive `EDITOR.split(" ")' +
+# EDITOR/VISUAL point at a wrapper binary, NOT directly at `emacsclient -t -a ""'.
+# Claude Code launches $VISUAL (else $EDITOR) via naive `split(" ")' +
 # shell-less `spawnSync', so a bare `-a ""' would reach emacsclient as the
 # LITERAL two-char string `""' and break the daemon-autostart fallback whenever
-# no daemon is running.  Routing through a real bash script restores correct
-# `-a ""' parsing for every consumer (git, Claude, etc.) while keeping the
-# daemon semantics described below.
+# no daemon is running.  The wrapper passes a real empty string instead.
 #
 # The split follows the POSIX convention: VISUAL is the full-screen/graphical
 # editor, EDITOR the terminal fallback.  Tools that honour VISUAL first (git,
-# Claude Code's transcript-viewer `v') therefore get a GUI Emacs frame; anything
-# that only reads EDITOR stays in the terminal.  claude-editor-gui degrades to a
-# terminal frame when there is no display (ssh / bare tty).
+# Claude Code's Ctrl+G prompt editor and Ctrl+O transcript viewer) therefore get
+# a GUI Emacs frame; anything that only reads EDITOR stays in the terminal.  The
+# GUI mode degrades to a terminal frame when there is no display (ssh / bare tty).
 #
-# Both paths below are symlinks into the .claude submodule, where the real
-# scripts live -- [claude-editor](.claude/bin/claude-editor) and
-# [claude-editor-gui](.claude/bin/claude-editor-gui) -- same layout as the mq*
-# helpers.
+# Both paths below are symlinks to ONE Rust binary, open-emacs, which picks its
+# mode from the name it is called by: ~/code/fenrir-claude-plugin/open-emacse-rust/
+# (rebuild + relink with its install.sh; `cargo clean' there breaks both vars).
 export EDITOR="$HOME/.local/bin/claude-editor"
 export VISUAL="$HOME/.local/bin/claude-editor-gui"
 
