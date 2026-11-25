@@ -138,9 +138,11 @@ fi
 #
 # The split follows the POSIX convention: VISUAL is the full-screen/graphical
 # editor, EDITOR the terminal fallback.  Tools that honour VISUAL first (git,
-# Claude Code's Ctrl+G prompt editor and Ctrl+O transcript viewer) therefore get
-# a GUI Emacs frame; anything that only reads EDITOR stays in the terminal.  The
-# GUI mode degrades to a terminal frame when there is no display (ssh / bare tty).
+# Claude Code's Ctrl+G prompt editor) therefore get a GUI Emacs frame.  With
+# /config's "Show last response in external editor" on, Ctrl+G also carries the
+# recent replies; Ctrl+O's transcript view has no open-in-editor key.  Anything
+# that only reads EDITOR stays in the terminal.  The GUI mode degrades to a
+# terminal frame when there is no display (ssh / bare tty).
 #
 # Both paths below are symlinks to ONE Rust binary, open-emacs, which picks its
 # mode from the name it is called by: ~/code/fenrir-claude-plugin/open-emacse-rust/
