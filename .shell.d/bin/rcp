@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# rcp — rsync -a --info=progress2 with the flags pre-filled.
+# Usage: rcp [rsync options] SRC... DEST
+#   rcp ~/projects/ /mnt/backup/projects/     copy the CONTENTS of projects/
+#   rcp ~/projects  /mnt/backup/              copy the directory itself
+#   rcp -n --delete ~/projects/ host:/data/   any extra rsync option passes through
+set -euo pipefail
+
+if [[ $# -lt 2 || $1 == -h || $1 == --help ]]; then
+  sed -n '2,6s/^# \{0,1\}//p' "$0"
+  [[ $# -ge 1 && ( $1 == -h || $1 == --help ) ]] && exit 0
+  exit 2
+fi
+
+exec rsync -a --info=progress2 "$@"
