@@ -27,7 +27,7 @@ The checkout puts =~/.local/bin/dotgit= in place; from here on every command for
 
 4. tmux: =ln -sfn ~/.tmux/tmux.conf ~/.tmux.conf=, =prefix + I=, then =bash ~/.tmux/tools/build-all.sh= (cargo; the cmake builds for =sift=, =pane-jump=, =tmux-bar= and =win-pick= --- the last two with =clang++=; the Meson build for =cc-main-menu=; =tmux-zhuyin='s own =scripts/build.sh=, which prefers Debian =libftxui-dev= and =libchewing3-dev=) --- see the [[file:../CLAUDE.md::#tmux-tmux-config-repo][tmux repo section]]. Required new dependencies: a C++20 compiler (g++ ≥ 10), =cmake=, and for =cc-main-menu= also =meson= (≥ 1.1), =ninja= and network on the first build (Meson clones FTXUI v5.0.0); =sift= and =pane-jump= need no libraries beyond libc. =ninja= (=apt install ninja-build=) is therefore required for =cc-main-menu=; for the two cmake tools it is optional --- only the =cmake --preset= spelling in that section wants it, and =build-all.sh= uses the generator-less commands.
 
-5. fenrir-tools: build both CLIs, recreate symlinks --- see [[file:../CLAUDE.md::#fenrir-tools-locally-developed-cli-tools][fenrir-tools section]].
+5. fenrir-tools: build both CLIs, recreate symlinks --- see [[file:../CLAUDE.md::#fenrir-tools-locally-developed-cli-tools][fenrir-tools section]]. Then the editor links: =bash ~/code/fenrir-claude-plugin/open-emacse-rust/install.sh= builds =open-emacs= and points =~/.local/bin/claude-editor{,-gui}= at it; until it runs, =EDITOR= and =VISUAL= from =~/.bashrc= point at nothing.
 
 6. Install gitleaks to =~/.local/bin/gitleaks= from [[https://github.com/gitleaks/gitleaks/releases][upstream releases]] (binary, not tracked) --- required *only if* you wired the hook in step 2; it is also useful on its own for a manual =gitleaks git --staged= run.
 

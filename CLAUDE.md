@@ -64,6 +64,12 @@ ln -sfn ~/fenrir-tools/claud-chat-acp/target/release/claud-chat  ~/.local/bin/cl
 ln -sfn ~/fenrir-tools/claude-agentic-chat/dist/index.js         ~/.local/bin/claude-chat
 ```
 
+`~/.local/bin/{claude-editor,claude-editor-gui}` — the targets of `EDITOR` / `VISUAL` in [`.bashrc`](.bashrc) — are untracked symlinks of the same kind (untracked 2026-11-27): both point at the `open-emacs` binary in `~/code/fenrir-claude-plugin/open-emacse-rust/target/release/`, which picks its TUI or GUI mode from the name it is called by. One script builds it and recreates both links, also after a `cargo clean` there:
+
+```bash
+bash ~/code/fenrir-claude-plugin/open-emacse-rust/install.sh
+```
+
 Each inner repo's own `.gitignore` handles its build artefacts — don't duplicate those in the root [`.gitignore`](.gitignore). Some carry their own `CLAUDE.md` — that's the place for tool-internal guidance, not this file.
 
 ## `.claude/`: Claude Code config + skills

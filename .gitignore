@@ -71,8 +71,6 @@
 /.local/*
 !/.local/bin/
 /.local/bin/*
-!/.local/bin/claude-editor
-!/.local/bin/claude-editor-gui
 !/.local/bin/dotgit
 !/.local/bin/mqpub
 !/.local/bin/mqsend
