@@ -1,0 +1,4 @@
+# User-level: cache rustc output across cold builds (target/ wiped).
+# Kept out of project configs so CI/deploy hosts need not install sccache.
+[build]
+rustc-wrapper = "sccache"

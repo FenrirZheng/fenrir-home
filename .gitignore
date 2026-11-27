@@ -112,3 +112,10 @@
 !/.claude-jail/hooks/
 /.claude-jail/hooks/*
 !/.claude-jail/hooks/path-guard.sh
+
+# ============================================================
+# .cargo/: strict whitelist — CARGO_HOME holds credentials.toml (crates.io
+# token), registry/ and git/ download caches, bin/ and install records.
+# ============================================================
+/.cargo/*
+!/.cargo/config.toml
