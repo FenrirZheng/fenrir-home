@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# worktree-create — create a git worktree for a branch in a sibling directory.
+#
+# Usage:
+#   worktree-create <branch> [base-ref]
+#
+# Creates  <parent>/<repo>_<branch>/  as a new worktree, where:
+#   <parent> = the directory containing the MAIN worktree
+#   <repo>   = the main worktree's folder name
+#   <branch> = the branch name, with '/' replaced by '-' for the path segment
+#
+#   - If <branch> already exists, that branch is checked out into the worktree.
+#   - If <branch> does not exist, it is created from [base-ref]
+#     (default: the current HEAD of wherever you run this).
+#
+# Notes:
+#   - git forbids checking out the same branch in two worktrees at once.
+#   - For coinsasia *backend* edits, run this from `dev` (or pass `dev` as the
+#     2nd arg). Basing a backend worktree on `main` trips the phantom-submodule
+#     trap — see backend/backend-api-golang/CLAUDE.md § Worktree base-branch trap.
+#
+set -euo pipefail
+
+branch="${1:-}"
+base="${2:-HEAD}"
+
+if [[ -z "$branch" ]]; then
+  echo "usage: worktree-create <branch> [base-ref]" >&2
+  exit 1
+fi
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "worktree-create: not inside a git repository" >&2
+  exit 1
+fi
+
+# Anchor naming to the MAIN worktree, even when run from inside a linked one.
+common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+repo_root="$(dirname "$common_dir")"
+project="$(basename "$repo_root")"
+
+safe_branch="${branch//\//-}"
+dest="$(dirname "$repo_root")/${project}_${safe_branch}"
+
+if [[ -e "$dest" ]]; then
+  echo "worktree-create: destination already exists: $dest" >&2
+  exit 1
+fi
+
+if git show-ref --verify --quiet "refs/heads/${branch}"; then
+  echo "→ branch '${branch}' exists — checking it out"
+  git worktree add "$dest" "$branch"
+else
+  echo "→ branch '${branch}' is new — creating from '${base}'"
+  git worktree add -b "$branch" "$dest" "$base"
+fi
+
+echo
+echo "✓ worktree ready"
+echo "    path:   $dest"
+echo "    branch: $branch"
+echo "    cd $dest"
