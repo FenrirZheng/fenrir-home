@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# claude-jail — start Claude Code without ~/.claude, confined to the directory it is launched in.
+#
+# Usage: claude-jail [--model ID] [any other claude arguments]
+#   Without --model, asks which model to use. Other arguments pass through to claude.
+#
+# What it does:
+#   - CLAUDE_CONFIG_DIR=~/.claude-jail: no user CLAUDE.md, hooks, skills, plugins or MCP from ~/.claude.
+#     Only ~/.claude/.credentials.json is copied in on each launch so no re-login is needed.
+#   - A PreToolUse hook blocks Read/Write/Edit/MultiEdit/NotebookEdit/Glob/Grep/LS on any path
+#     outside the launch directory (symlinks resolved).
+#   - CLAUDE.md files in parent directories are excluded (claudeMdExcludes).
+#   - Model pinned three ways (--model, --settings model, ANTHROPIC_MODEL), as in the sibling launchers.
+#
+# Known limits:
+#   - Not an OS sandbox: a Bash command you approve (e.g. `cat ~/x`) can still read outside.
+#     Bash and WebFetch always ask (defaultMode "default").
+#   - The jail copy of the OAuth token may refresh on its own; if the main ~/.claude session then
+#     fails auth, run /login there. Each launch copies the main's current token again.
+#   - First launch may show onboarding prompts (fresh .claude.json in ~/.claude-jail).
+set -euo pipefail
+
+for cmd in claude jq realpath; do
+  command -v "$cmd" >/dev/null 2>&1 || { echo "claude-jail: $cmd not found on PATH" >&2; exit 127; }
+done
+
+# --- model -------------------------------------------------------------------
+MODEL=""
+args=()
+while (($#)); do
+  case "$1" in
+    --model) MODEL="${2:?--model needs a value}"; shift 2 ;;
+    --model=*) MODEL="${1#--model=}"; shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+if [[ -z "$MODEL" ]]; then
+  labels=("Opus 5.5    (claude-opus-5-5)"
+          "Sonnet 5.5  (claude-sonnet-5-5)"
+          "Haiku 5.5   (claude-haiku-5-5)"
+          "Fable 5.2   (claude-fable-5-2)")
+  ids=(claude-opus-5-5 claude-sonnet-5-5 claude-haiku-5-5 claude-fable-5-2)
+  PS3="Model? "
+  select _ in "${labels[@]}"; do
+    if [[ "$REPLY" =~ ^[1-4]$ ]]; then MODEL="${ids[REPLY-1]}"; break; fi
+    echo "Pick 1-4." >&2
+  done
+  [[ -n "$MODEL" ]] || { echo "claude-jail: no model chosen" >&2; exit 1; }
+fi
+
+# --- isolated config dir -----------------------------------------------------
+export CLAUDE_CONFIG_DIR="$HOME/.claude-jail"
+mkdir -p "$CLAUDE_CONFIG_DIR/hooks"
+chmod 700 "$CLAUDE_CONFIG_DIR"
+
+src_cred="$HOME/.claude/.credentials.json"
+if [[ -f "$src_cred" ]]; then
+  install -m 600 "$src_cred" "$CLAUDE_CONFIG_DIR/.credentials.json"
+else
+  echo "claude-jail: $src_cred not found — you will need /login inside the jail" >&2
+fi
+
+export CLAUDE_JAIL_ROOT
+CLAUDE_JAIL_ROOT="$(pwd -P)"
+
+# --- path-guard hook (rewritten every launch so edits here take effect) -------
+HOOK="$CLAUDE_CONFIG_DIR/hooks/path-guard.sh"
+cat >"$HOOK" <<'HOOK_EOF'
+#!/usr/bin/env bash
+# PreToolUse: deny file tools on paths outside $CLAUDE_JAIL_ROOT. Written by claude-jail.
+set -uo pipefail
+root="${CLAUDE_JAIL_ROOT:?}"
+input="$(cat)"
+p="$(jq -r '.tool_input | (.file_path // .notebook_path // .path // empty)' <<<"$input")"
+[[ -z "$p" ]] && exit 0                      # Glob/Grep default to cwd
+cwd="$(jq -r '.cwd // empty' <<<"$input")"
+[[ "$p" == "~"* ]] && p="$HOME${p:1}"
+[[ "$p" != /* ]] && p="${cwd:-$root}/$p"
+abs="$(realpath -m -- "$p")"
+if [[ "$abs" == "$root" || "$abs" == "$root"/* ]]; then exit 0; fi
+echo "claude-jail: access outside $root is blocked ($abs)" >&2
+exit 2
+HOOK_EOF
+chmod 700 "$HOOK"
+
+# --- exclude CLAUDE.md files from every ancestor of the root -----------------
+excludes=()
+d="$(dirname "$CLAUDE_JAIL_ROOT")"
+while :; do
+  base="${d%/}"
+  excludes+=("$base/CLAUDE.md" "$base/CLAUDE.local.md" "$base/.claude/CLAUDE.md" "$base/.claude/rules/**")
+  [[ "$d" == / ]] && break
+  d="$(dirname "$d")"
+done
+[[ "$CLAUDE_JAIL_ROOT" == / ]] && excludes=()
+
+SETTINGS="$(jq -n \
+  --arg model "$MODEL" \
+  --arg hook "$HOOK" \
+  --args '{
+    model: $model,
+    permissions: { defaultMode: "default" },
+    claudeMdExcludes: $ARGS.positional,
+    hooks: { PreToolUse: [ {
+      matcher: "Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|LS",
+      hooks: [ { type: "command", command: $hook } ]
+    } ] }
+  }' "${excludes[@]}")"
+
+export ANTHROPIC_MODEL="$MODEL"
+echo "claude-jail: model=$MODEL root=$CLAUDE_JAIL_ROOT config=$CLAUDE_CONFIG_DIR" >&2
+exec claude --model "$MODEL" --settings "$SETTINGS" "${args[@]}"

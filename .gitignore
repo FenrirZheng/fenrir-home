@@ -99,3 +99,16 @@
 !/.gemini/bin/talk_claude.sh
 !/.gemini/skills/
 !/.gemini/skills/**
+
+# ============================================================
+# .claude-jail/: cred-bearing app dir — strict whitelist, NEVER use **
+# ============================================================
+# CLAUDE_CONFIG_DIR of .shell.d/bin/claude-jail. Holds .credentials.json (OAuth
+# token copied in on every launch), .claude.json + backups/ (account state),
+# history.jsonl, projects/ (transcripts), session-env/, shell-snapshots/, caches
+# and synced plugins/skills. Whitelist files one by one.
+/.claude-jail/*
+!/.claude-jail/settings.json
+!/.claude-jail/hooks/
+/.claude-jail/hooks/*
+!/.claude-jail/hooks/path-guard.sh
