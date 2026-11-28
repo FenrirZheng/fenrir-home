@@ -2,4 +2,4 @@
 # Whitelist only what this repo deliberately tracks.
 /*
 !/.gitignore
-!/im-fcitx5.conf
+!/im-ibus.conf

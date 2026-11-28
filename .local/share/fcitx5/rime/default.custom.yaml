@@ -1,5 +1,0 @@
-patch:
-  menu/page_size: 15
-  schema_list:
-    - schema: bopomofo_tw
-    - schema: bopomofo

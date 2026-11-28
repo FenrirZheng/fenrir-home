@@ -45,7 +45,7 @@
 # ============================================================
 # .config/: deny-then-whitelist (merged from ~/.config/.git on 2026-11-19)
 # ============================================================
-# Per-directory .gitignore files inside autostart/, environment.d/, and fcitx5/
+# Per-directory .gitignore files inside autostart/ and environment.d/
 # continue to filter third-party/cached files within those whitelisted dirs.
 /.config/*
 !/.config/alacritty/
@@ -56,7 +56,6 @@
 !/.config/alarm-services/IG-PRD-02/**
 !/.config/autostart/
 !/.config/environment.d/
-!/.config/fcitx5/
 !/.config/keyd/
 !/.config/keyd/**
 !/.config/openfortivpn/
@@ -76,14 +75,6 @@
 !/.local/bin/mqsend
 !/.local/bin/mqstop
 !/.local/bin/zoxide-seed.sh
-# fcitx5-rime user config (schema selection). build/, *.userdb/, installation.yaml stay ignored.
-!/.local/share/
-/.local/share/*
-!/.local/share/fcitx5/
-/.local/share/fcitx5/*
-!/.local/share/fcitx5/rime/
-/.local/share/fcitx5/rime/*
-!/.local/share/fcitx5/rime/*.custom.yaml
 
 # ============================================================
 # .gemini/: cred-bearing app dir — strict whitelist, NEVER use **
