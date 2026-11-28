@@ -24,22 +24,6 @@ Current physical → logical map (laptop AT keyboard + 2 Logitech wireless; =[id
 | Left Win                | tap = Super (GNOME Activities), hold = =opt= layer (word-jump: =C-left/right/backspace=) |                                                                                                                                                          |
 | Right Ctrl, Left Alt    | unchanged                                                                                |                                                                                                                                                          |
 
-The IME toggle calls =/usr/local/bin/fcitx5-toggle= (root → drops to user =fenrir='s session bus → =fcitx5-remote -t=). That script is *not tracked* (it's in =/usr/local/bin/=); recreate it on a fresh machine:
+The IME toggle: Right Alt sends Super+Space (=rightalt = M-space=), GNOME's =switch-input-source= shortcut (=gsettings get org.gnome.desktop.wm.keybindings switch-input-source= must still list =<Super>space=). It switches between the IBus engine =chewing-rs= and plain =us=. No helper script is involved.
 
-#+begin_src sh
-sudo tee /usr/local/bin/fcitx5-toggle >/dev/null <<'EOF'
-#!/bin/bash
-# Toggle fcitx5 IM state. Called by keyd (RightAlt) — keyd runs as root, so drop
-# to user fenrir's session bus to reach the fenrir-owned fcitx5 daemon.
-exec /usr/sbin/runuser -u fenrir -- env \
-  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
-  XDG_RUNTIME_DIR=/run/user/1000 \
-  DISPLAY=:0 \
-  /usr/bin/fcitx5-remote -t
-EOF
-sudo chmod +x /usr/local/bin/fcitx5-toggle
-#+end_src
-
-=fcitx5= itself: [[file:../.config/fcitx5/config][=/.config/fcitx5/config=]] keeps =TriggerKeys=F13= as a vestigial no-op (nothing emits F13 here) --- the real toggle is the keyd→RightAlt→DBus path above; the =[Hotkey]= comment in that file says so.
-
-Input methods: fcitx5's IM list is =keyboard-us=, =rime= (default), =chewing= --- the profile is [[file:../.config/fcitx5/profile][=.config/fcitx5/profile=]], tracked by the dotfiles repo via its =.config/= whitelist. Rime schema selection (注音: =bopomofo_tw=, =bopomofo=) is [[file:../.local/share/fcitx5/rime/default.custom.yaml][=.local/share/fcitx5/rime/default.custom.yaml=]], tracked via the =.local/= whitelist in [[file:../.gitignore][=.gitignore=]]; rime's =build/= and =*.userdb/= next to it stay untracked. Fresh machine: =apt install fcitx5-rime rime-data-bopomofo= (see fresh-clone step 7), then add rime to the IM group with =fcitx5-configtool= or the DBus =SetInputMethodGroupInfo= call.
+Input method: IBus with =chewing-rs= (=~/code/gnome-chewing-ui=), since 2026-11-28. Deployment, redeploy and rollback are in that repo's =CLAUDE.md=, section "Deploying as the system input method". fcitx5 was removed with apt. Leftovers: =/usr/local/bin/fcitx5-toggle= (the old root → =fcitx5-remote -t= helper, now called by nothing) and the tracked =.config/fcitx5/*= and =.local/share/fcitx5/rime/= files, kept only in case fcitx5 is reinstalled.

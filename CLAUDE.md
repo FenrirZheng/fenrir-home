@@ -91,7 +91,7 @@ Tool/skill-internal guidance belongs in `.claude/`'s own docs (its `CLAUDE.md`, 
 
 ## Keyboard remapping (keyd)
 
-Physical keys are remapped by keyd; `~/.config/keyd/default.conf` is the source of truth and `/etc/keyd/default.conf` a deployed copy. **Read [`docs/keyd.org`](docs/keyd.org) before touching keyd, fcitx5, rime or the RightAlt IME toggle** — it has the deploy command, the key map and the `fcitx5-toggle` script body.
+Physical keys are remapped by keyd; `~/.config/keyd/default.conf` is the source of truth and `/etc/keyd/default.conf` a deployed copy. **Read [`docs/keyd.org`](docs/keyd.org) before touching keyd, the input method (IBus + chewing-rs) or the RightAlt IME toggle** — it has the deploy command and the key map.
 
 ## Commit conventions
 
